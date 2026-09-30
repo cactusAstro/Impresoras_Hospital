@@ -668,6 +668,103 @@
         .ayuda ul { margin: 0; padding-left: 20px; line-height: 1.7; }
 
         /* ============================================ */
+        /* MONITOR DE CONSTANTES                        */
+        /* ============================================ */
+        .monitor {
+            --mon-verde: #34d399; --mon-ambar: #fbbf24; --mon-rojo: #f87171; --mon-gris: #6f8f8b;
+            --mon-color: var(--mon-verde);
+            --mon-linea: rgba(94, 234, 212, .12);
+            display: grid; grid-template-columns: auto minmax(0, 1fr) auto;
+            margin-bottom: 14px; border-radius: 14px; overflow: hidden;
+            background: radial-gradient(120% 160% at 50% 0%, #10272a 0%, #081416 72%);
+            border: 1px solid #183235; color: #dcfff7;
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, .05), var(--shadow);
+        }
+        .monitor[data-ritmo="aviso"] { --mon-color: var(--mon-ambar); }
+        .monitor[data-ritmo="plano"] { --mon-color: var(--mon-rojo); }
+        .monitor[data-ritmo="apagado"] { --mon-color: var(--mon-gris); }
+
+        .mon-vital {
+            display: flex; align-items: center; gap: 12px;
+            min-width: 176px; padding: 12px 18px 12px 16px;
+            border-right: 1px solid var(--mon-linea);
+            background: none; border-top: 0; border-bottom: 0; border-left: 0; color: inherit; text-align: left;
+        }
+        .mon-vital:hover { background: rgba(94, 234, 212, .05); }
+        .mon-corazon {
+            width: 26px; height: 26px; flex-shrink: 0;
+            color: var(--mon-color); fill: currentColor; stroke: none;
+            filter: drop-shadow(0 0 6px currentColor);
+            transition: color .4s;
+        }
+        .mon-corazon.late { animation: late .3s ease-out; }
+        @keyframes late { 35% { transform: scale(1.3); } }
+        .mon-pct {
+            display: block;
+            font-family: var(--mono); font-size: 30px; line-height: 1; font-weight: 600;
+            color: var(--mon-color); text-shadow: 0 0 14px color-mix(in srgb, var(--mon-color) 45%, transparent);
+            font-variant-numeric: tabular-nums; transition: color .4s;
+        }
+        .mon-pct small { font-size: 15px; opacity: .8; margin-left: 1px; }
+        .monitor[data-ritmo="plano"] .mon-pct, .monitor[data-ritmo="plano"] .mon-datos b { opacity: .5; }
+        .mon-etq { display: block; margin-top: 5px; font-size: 10.5px; letter-spacing: .14em; text-transform: uppercase; color: #82b5ad; }
+
+        .mon-traza { position: relative; min-height: 80px; }
+        .mon-traza canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+        .mon-diag {
+            position: absolute; left: 14px; top: 9px; z-index: 1;
+            display: flex; align-items: center; gap: 7px;
+            font-family: var(--mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase;
+            color: #82b5ad; pointer-events: none;
+        }
+        .mon-diag::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--mon-color); box-shadow: 0 0 8px var(--mon-color); }
+        .monitor[data-ritmo="aviso"] .mon-diag, .monitor[data-ritmo="plano"] .mon-diag { color: var(--mon-color); }
+        .monitor[data-ritmo="plano"] .mon-diag::before, .monitor[data-ritmo="aviso"] .mon-diag::before { animation: alarma 1.2s steps(1) infinite; }
+        @keyframes alarma { 50% { opacity: .15; } }
+
+        .mon-datos { display: flex; align-items: stretch; border-left: 1px solid var(--mon-linea); }
+        .mon-dato {
+            display: flex; flex-direction: column; justify-content: center; gap: 4px;
+            min-width: 108px; padding: 10px 16px;
+            background: none; border: 0; color: inherit; text-align: left;
+        }
+        .mon-dato + .mon-dato { border-left: 1px solid rgba(94, 234, 212, .08); }
+        button.mon-dato:hover { background: rgba(94, 234, 212, .06); }
+        .mon-dato[aria-pressed="true"] { background: rgba(94, 234, 212, .12); }
+        .mon-dato small { font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase; color: #82b5ad; white-space: nowrap; }
+        .mon-dato b { font-family: var(--mono); font-size: 21px; line-height: 1.1; font-weight: 600; font-variant-numeric: tabular-nums; }
+        .mon-dato .rel { font-size: 14px; font-weight: 500; white-space: nowrap; }
+        .mon-dato.rojo.hay b { color: var(--mon-rojo); text-shadow: 0 0 12px rgba(248, 113, 113, .45); }
+
+        /* Cruz en el logo */
+        .brand-logo { position: relative; }
+        .brand-cruz {
+            position: absolute; right: -5px; bottom: -5px;
+            width: 16px; height: 16px; border-radius: 50%;
+            background: #fff; box-shadow: 0 0 0 2px var(--surface);
+        }
+        .brand-cruz::before, .brand-cruz::after {
+            content: ""; position: absolute; left: 50%; top: 50%;
+            width: 10px; height: 3.4px; border-radius: 1px; background: #e11d48;
+            transform: translate(-50%, -50%);
+        }
+        .brand-cruz::after { transform: translate(-50%, -50%) rotate(90deg); }
+
+        @media (max-width: 1000px) {
+            .monitor { grid-template-columns: auto minmax(0, 1fr); }
+            .mon-datos { grid-column: 1 / -1; border-left: 0; border-top: 1px solid var(--mon-linea); }
+            .mon-dato { flex: 1; min-width: 0; }
+        }
+        @media (max-width: 560px) {
+            .monitor { grid-template-columns: minmax(0, 1fr); }
+            .mon-vital { border-right: 0; border-bottom: 1px solid var(--mon-linea); padding: 10px 14px; }
+            .mon-traza { min-height: 66px; }
+            .mon-dato { padding: 8px 12px; }
+            .mon-dato b { font-size: 18px; }
+        }
+        @media print { .monitor { display: none !important; } }
+
+        /* ============================================ */
         /* ROLES                                        */
         /* ============================================ */
         .role-lector [data-rol~="editor"],
@@ -837,7 +934,7 @@
     <!-- ============================================ -->
     <header class="top">
         <div class="brand">
-            <span class="brand-logo" aria-hidden="true"><svg class="icon"><use href="#i-printer"/></svg></span>
+            <span class="brand-logo" aria-hidden="true"><svg class="icon"><use href="#i-printer"/></svg><span class="brand-cruz"></span></span>
             <div>
                 <h1 id="tituloApp">Impresoras<span class="txt-largo"> · Informática</span></h1>
                 <small>Panel de gestión · <span class="role-badge" id="roleBadge">Administrador</span></small>
@@ -922,6 +1019,20 @@
         </aside>
 
         <main id="lista" tabindex="-1">
+            <section class="monitor" id="monitor" data-ritmo="apagado" aria-label="Monitor del estado de las impresoras">
+                <button class="mon-vital" data-accion="estado" data-valor="" title="Ver todas">
+                    <svg class="mon-corazon" id="monCorazon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l1 1.1L12 21l7.8-7.5 1-1.1a5.5 5.5 0 0 0 0-7.8z"/></svg>
+                    <span><span class="mon-pct" id="monPct">—</span><span class="mon-etq" id="monPctEtq">responden</span></span>
+                </button>
+                <div class="mon-traza" aria-hidden="true"><canvas id="ecg"></canvas><span class="mon-diag" id="monDiag">Sin datos</span></div>
+                <div class="mon-datos">
+                    <button class="mon-dato rojo" id="monOffline" data-accion="estado" data-valor="offline" aria-pressed="false" title="Ver las que no responden"><small>Offline</small><b>0</b></button>
+                    <button class="mon-dato" id="monSin" data-accion="estado" data-valor="desconocido" aria-pressed="false" title="Ver las que faltan por comprobar"><small>Sin comprobar</small><b>0</b></button>
+                    <div class="mon-dato" id="monUltima"><small>Última</small><b class="rel">—</b></div>
+                </div>
+                <p class="sr-only" id="monTexto" aria-live="polite"></p>
+            </section>
+
             <div class="resumen" id="resumen" aria-label="Filtrar por estado"></div>
 
             <div class="list-head">
@@ -1420,6 +1531,7 @@
             $("#bannerError").classList.toggle("activo", ok === false);
             clearTimeout(reintentoServidor);
             if (ok === false) reintentoServidor = setTimeout(() => comprobarServidor(), 30000);
+            programarRender();
         }
 
         async function comprobarServidor(avisar) {
@@ -1460,6 +1572,7 @@
                     t: Date.now()
                 };
                 estados[host] = nuevo;
+                monitor.latir(nuevo.estado);
                 guardarHistoricoPing(host, nuevo.estado);
                 guardarEstadosLuego();
                 let cambio = null;
@@ -1858,6 +1971,7 @@
             actualizarBarraSeleccion();
             actualizarTitulo();
             refrescarEstadoFicha();
+            monitor.pintar();
             const n = ultimoResultado.length;
             $("#txtComprobar").textContent = hayFiltros() && n !== impresorasFinales.length
                 ? `Comprobar ${n}`
@@ -1890,12 +2004,7 @@
             }).join("");
             html += `<button class="chip" data-accion="favoritas" aria-pressed="${filtros.favoritas}">${icono("star")}Favoritas <span class="n">${favoritos.filter(id => porId.has(id)).length}</span></button>`;
 
-            const tiempos = Object.values(estados).map(e => e.t).filter(Boolean);
-            const ultima = tiempos.length ? Math.max(...tiempos) : 0;
-            html += `<span class="ultima">`;
-            if (conteos.offline) html += `<button class="btn btn-sm" data-accion="reintentar-offline">${icono("ping")}Reintentar offline (${conteos.offline})</button>`;
-            html += ultima ? `<span title="${escapeHTML(fechaHora(ultima))}">${icono("clock")} Última comprobación: <span data-t="${ultima}">${textoRelativo(ultima)}</span></span>` : `<span>${icono("clock")} Aún no se ha comprobado nada</span>`;
-            html += `</span>`;
+            if (conteos.offline) html += `<span class="ultima"><button class="btn btn-sm" data-accion="reintentar-offline">${icono("ping")}Reintentar offline (${conteos.offline})</button></span>`;
             $("#resumen").innerHTML = html;
         }
 
@@ -2876,6 +2985,272 @@
         document.addEventListener("click", (e) => {
             if (!e.target.closest("#menuMas")) toggleMenu(false);
         });
+
+        // ============================================
+        // MONITOR DE CONSTANTES: un electrocardiograma de la red
+        // Late en verde si todo responde, en ámbar con arritmias si hay caídas,
+        // se acelera mientras se comprueba y se queda plano si no hay servidor.
+        // ============================================
+        const monitor = (() => {
+            const el = $("#monitor");
+            const lienzo = $("#ecg");
+            const ctx = lienzo.getContext("2d");
+            const corazon = $("#monCorazon");
+            const COLOR = { online: "#34d399", web: "#60a5fa", offline: "#f87171", aviso: "#fbbf24", apagado: "#5f7f7b" };
+            const BASE = { normal: "#34d399", aviso: "#fbbf24", apagado: "#4f6d69", plano: "#f87171", rapido: "#34d399" };
+            const VELOCIDAD = 120;   // px por segundo, como el papel de un electro
+            const HUECO = 26;        // hueco que borra delante del trazo
+            const reducido = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+            let ancho = 0, alto = 0, dpr = 1;
+            let ys = new Float32Array(0), colores = [];
+            let x = 0, resto = 0, ultimoT = 0, raf = 0, visible = true;
+            let latido = null, proximo = 0, cuenta = 0;
+            let ritmoActual = "apagado";
+            const cola = [];
+
+            const g = (u, c, s) => Math.exp(-((u - c) * (u - c)) / (2 * s * s));
+            // Onda P-QRS-T; las caídas dibujan una arritmia
+            function onda(tipo, u) {
+                if (tipo === "offline") return -0.55 * g(u, .30, .026) + .8 * g(u, .38, .012) - 1.0 * g(u, .44, .016) + .38 * g(u, .53, .022);
+                return .12 * g(u, .12, .03) - .14 * g(u, .30, .011) + g(u, .34, .011) - .26 * g(u, .38, .013) + .24 * g(u, .62, .05);
+            }
+
+            function medir() {
+                const r = lienzo.getBoundingClientRect();
+                const nuevoAncho = Math.max(1, Math.round(r.width));
+                dpr = Math.min(2, window.devicePixelRatio || 1);
+                alto = Math.max(1, Math.round(r.height));
+                lienzo.width = nuevoAncho * dpr;
+                lienzo.height = alto * dpr;
+                if (nuevoAncho !== ancho) {
+                    ancho = nuevoAncho;
+                    ys = new Float32Array(ancho).fill(NaN);
+                    colores = new Array(ancho).fill(null);
+                    x = 0;
+                }
+                if (reducido) pintarEstatico(); else dibujar();
+            }
+
+            function ritmo() {
+                if (servidor.ok === false) return "plano";
+                if (tareaPing) return "rapido";
+                const d = datos();
+                if (!d.comprobadas) return "apagado";
+                return d.caidas ? "aviso" : "normal";
+            }
+
+            function datos() {
+                let arriba = 0, caidas = 0, sin = 0;
+                impresorasFinales.forEach(p => {
+                    const c = claveEstado(p);
+                    if (c === "online" || c === "web") arriba++;
+                    else if (c === "offline") caidas++;
+                    else if (c === "desconocido") sin++;
+                });
+                return { arriba, caidas, sin, comprobadas: arriba + caidas };
+            }
+
+            function pulso(tipo) {
+                if (reducido) return;
+                corazon.style.color = tipo === "offline" ? COLOR.offline : tipo === "web" ? COLOR.web : "";
+                corazon.classList.remove("late");
+                void corazon.getBoundingClientRect();
+                corazon.classList.add("late");
+            }
+
+            function iniciarLatido(t) {
+                const r = ritmoActual;
+                let tipo, dur = .6, intervalo = 1.15, amp = 1;
+                if (cola.length && r !== "plano") {
+                    tipo = cola.shift();
+                    dur = r === "rapido" ? .24 : .5;
+                    intervalo = r === "rapido" ? .15 : .7;
+                    amp = tipo === "web" ? .7 : 1;
+                } else if (r === "rapido" || r === "plano") {
+                    proximo = t + .1;
+                    return;
+                } else if (r === "apagado") {
+                    tipo = "apagado"; amp = .38; intervalo = 1.7;
+                } else if (r === "aviso") {
+                    cuenta++;
+                    tipo = cuenta % 3 === 0 ? "offline" : "aviso";
+                    intervalo = .95;
+                } else {
+                    tipo = "online";
+                }
+                latido = { tipo, t0: t, dur, amp };
+                proximo = t + Math.max(intervalo, dur);
+                pulso(tipo);
+            }
+
+            function avanzar(t, dt) {
+                resto += dt * VELOCIDAD;
+                const n = Math.floor(resto);
+                resto -= n;
+                for (let k = 1; k <= n; k++) {
+                    const tc = t - dt + dt * k / n;
+                    if (!latido && tc >= proximo) iniciarLatido(tc);
+                    let v = 0, color = BASE[ritmoActual];
+                    if (latido) {
+                        const u = (tc - latido.t0) / latido.dur;
+                        if (u >= 1) latido = null;
+                        else { v = onda(latido.tipo, u) * latido.amp; color = COLOR[latido.tipo]; }
+                    }
+                    if (ritmoActual !== "plano") v += .012 * Math.sin(tc * 37) + .008 * Math.sin(tc * 91);
+                    ys[x] = v;
+                    colores[x] = color;
+                    x = (x + 1) % ancho;
+                }
+            }
+
+            function rejilla() {
+                ctx.lineWidth = 1;
+                ctx.strokeStyle = "rgba(94, 234, 212, .06)";
+                ctx.beginPath();
+                for (let gx = .5; gx < ancho; gx += 16) { ctx.moveTo(gx, 0); ctx.lineTo(gx, alto); }
+                for (let gy = .5; gy < alto; gy += 16) { ctx.moveTo(0, gy); ctx.lineTo(ancho, gy); }
+                ctx.stroke();
+            }
+
+            function dibujar(sinHueco) {
+                ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+                ctx.clearRect(0, 0, ancho, alto);
+                rejilla();
+                const base = alto * .66, escala = alto * .48;
+                ctx.lineWidth = 1.8;
+                ctx.lineJoin = "round";
+                ctx.lineCap = "round";
+                ctx.shadowBlur = 7;
+                let abierto = false, color = null, px = 0, py = 0;
+                const cerrar = () => { if (abierto) { ctx.stroke(); abierto = false; } };
+                for (let c = 0; c < ancho; c++) {
+                    const delante = (c - x + ancho) % ancho;
+                    const v = ys[c];
+                    if ((!sinHueco && delante < HUECO) || Number.isNaN(v)) { cerrar(); continue; }
+                    const y = base - v * escala;
+                    if (!abierto) {
+                        color = colores[c];
+                        ctx.strokeStyle = ctx.shadowColor = color;
+                        ctx.beginPath();
+                        ctx.moveTo(c, y);
+                        abierto = true;
+                    } else if (colores[c] !== color) {
+                        ctx.lineTo(c, y);
+                        ctx.stroke();
+                        color = colores[c];
+                        ctx.strokeStyle = ctx.shadowColor = color;
+                        ctx.beginPath();
+                        ctx.moveTo(c, y);
+                    } else {
+                        ctx.lineTo(c, y);
+                    }
+                    px = c; py = y;
+                }
+                cerrar();
+                if (!sinHueco) {
+                    // Punto brillante en la cabeza del trazo
+                    const cabeza = (x - 1 + ancho) % ancho;
+                    const v = ys[cabeza];
+                    if (!Number.isNaN(v)) {
+                        ctx.fillStyle = ctx.shadowColor = colores[cabeza] || BASE[ritmoActual];
+                        ctx.shadowBlur = 12;
+                        ctx.beginPath();
+                        ctx.arc(cabeza, base - v * escala, 2.6, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
+                }
+                ctx.shadowBlur = 0;
+            }
+
+            // Sin animaciones: un trazo fijo con el ritmo que toca
+            function pintarEstatico() {
+                if (!ancho) return;
+                const r = ritmoActual;
+                const intervalo = r === "apagado" ? 1.7 : r === "aviso" ? .95 : 1.15;
+                for (let c = 0; c < ancho; c++) {
+                    const t = c / VELOCIDAD;
+                    const i = Math.floor(t / intervalo), u = (t - i * intervalo) / .6;
+                    let tipo = r === "apagado" ? "apagado" : r === "aviso" ? (i % 3 === 2 ? "offline" : "aviso") : "online";
+                    const dentro = r !== "plano" && u < 1;
+                    ys[c] = dentro ? onda(tipo, u) * (tipo === "apagado" ? .38 : 1) : 0;
+                    colores[c] = dentro ? COLOR[tipo] : BASE[r];
+                }
+                dibujar(true);
+            }
+
+            function bucle(ms) {
+                raf = 0;
+                if (!visible || document.hidden || reducido) { ultimoT = 0; return; }
+                const t = ms / 1000;
+                const dt = ultimoT ? Math.min(.1, t - ultimoT) : 0;
+                ultimoT = t;
+                if (dt > 0) avanzar(t, dt);
+                dibujar();
+                raf = requestAnimationFrame(bucle);
+            }
+            function arrancar() { if (!raf && !reducido) raf = requestAnimationFrame(bucle); }
+
+            const DIAGNOSTICO = {
+                normal: () => "Ritmo normal · todas responden",
+                aviso: (d) => `${plural(d.caidas, "impresora sin respuesta", "impresoras sin respuesta")}`,
+                rapido: () => tareaPing ? `Comprobando ${tareaPing.hechas}/${tareaPing.total}` : "Comprobando…",
+                apagado: () => "Sin datos · pulsa Comprobar",
+                plano: () => "Sin señal · servidor de ping desconectado"
+            };
+
+            function pintar() {
+                const d = datos();
+                const nuevo = ritmo();
+                const cambio = nuevo !== ritmoActual;
+                ritmoActual = nuevo;
+                el.dataset.ritmo = nuevo === "rapido" ? (d.caidas ? "aviso" : "normal") : nuevo;
+
+                $("#monPct").innerHTML = d.comprobadas ? `${Math.round(d.arriba / d.comprobadas * 100)}<small>%</small>` : "—";
+                $("#monPctEtq").textContent = d.comprobadas ? `responden · ${d.arriba}/${d.comprobadas}` : "responden";
+                $("#monDiag").textContent = DIAGNOSTICO[nuevo](d);
+
+                const off = $("#monOffline");
+                off.querySelector("b").textContent = d.caidas;
+                off.classList.toggle("hay", d.caidas > 0);
+                off.setAttribute("aria-pressed", String(filtros.estado === "offline"));
+                const sin = $("#monSin");
+                sin.querySelector("b").textContent = d.sin;
+                sin.setAttribute("aria-pressed", String(filtros.estado === "desconocido"));
+
+                const tiempos = Object.values(estados).map(e => e.t).filter(Boolean);
+                const ultima = tiempos.length ? Math.max(...tiempos) : 0;
+                const rel = $("#monUltima b");
+                if (ultima) { rel.dataset.t = ultima; rel.textContent = textoRelativo(ultima); rel.title = fechaHora(ultima); }
+                else { delete rel.dataset.t; rel.textContent = "—"; }
+
+                if (cambio) {
+                    $("#monTexto").textContent = DIAGNOSTICO[nuevo](d);
+                    if (reducido) pintarEstatico();
+                    if (nuevo !== "rapido") cola.length = 0;
+                }
+            }
+
+            // Cada respuesta de ping es un latido
+            function latir(estado) {
+                cola.push(estado === "online" || estado === "web" ? estado : "offline");
+                if (cola.length > 40) {
+                    const i = cola.findIndex(t => t !== "offline");
+                    cola.splice(i >= 0 ? i : 0, 1);
+                }
+            }
+
+            if ("ResizeObserver" in window) new ResizeObserver(medir).observe(lienzo);
+            else window.addEventListener("resize", medir);
+            if ("IntersectionObserver" in window) {
+                new IntersectionObserver((e) => { visible = e[0].isIntersecting; if (visible) arrancar(); }).observe(el);
+            }
+            document.addEventListener("visibilitychange", () => { if (!document.hidden) arrancar(); });
+            medir();
+            arrancar();
+
+            return { pintar, latir };
+        })();
 
         // ============================================
         // ACCIONES (un único manejador de clics)

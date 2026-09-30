@@ -1,0 +1,3198 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Impresoras · Informática</title>
+    <meta name="description" content="Panel de impresoras del departamento de Informática: búsqueda, estado en tiempo real, incidencias e inventario.">
+
+    <!-- PWA: se puede instalar como aplicación -->
+    <link rel="manifest" href="manifest.json">
+    <link rel="icon" id="favicon" href="icon.svg" type="image/svg+xml">
+    <meta name="theme-color" content="#2c6e70">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Impresoras">
+
+    <!-- Tema antes de pintar, para que no parpadee -->
+    <script>
+        (function () {
+            var modo = null;
+            try { modo = localStorage.getItem("panel_impresoras_modo"); } catch (e) {}
+            if (modo === "dark" || (modo !== "light" && window.matchMedia && matchMedia("(prefers-color-scheme: dark)").matches)) {
+                document.documentElement.classList.add("dark");
+            }
+        })();
+    </script>
+
+    <style>
+        /* ============================================ */
+        /* TOKENS                                       */
+        /* ============================================ */
+        :root {
+            --bg: #f2f4f6;
+            --surface: #ffffff;
+            --surface-2: #f7f9fa;
+            --surface-3: #eef2f4;
+            --text: #16202a;
+            --muted: #5d6974;
+            --border: #dce2e7;
+            --border-strong: #c3ccd4;
+            --primary: #2c6e70;
+            --primary-600: #235a5c;
+            --primary-50: #e5f0f0;
+            --on-primary: #ffffff;
+            --ok: #157a3b;
+            --ok-bg: #dcf5e4;
+            --web: #1d4ed8;
+            --web-bg: #dde8ff;
+            --bad: #c81e1e;
+            --bad-bg: #fde3e3;
+            --unk: #66717c;
+            --unk-bg: #eceff2;
+            --warn: #a75a06;
+            --warn-bg: #fdf0d2;
+            --radius: 10px;
+            --shadow: 0 1px 2px rgba(16, 24, 40, .06), 0 1px 3px rgba(16, 24, 40, .08);
+            --shadow-lg: 0 18px 40px rgba(16, 24, 40, .2);
+            --header-h: 60px;
+            --ficha-w: 470px;
+            --font: "Segoe UI", system-ui, -apple-system, Roboto, "Helvetica Neue", Arial, sans-serif;
+            --mono: "Cascadia Mono", Consolas, "SFMono-Regular", Menlo, "Liberation Mono", monospace;
+            color-scheme: light;
+        }
+
+        :root.dark {
+            --bg: #0d1318;
+            --surface: #141c23;
+            --surface-2: #19232b;
+            --surface-3: #1f2a33;
+            --text: #e4ebf0;
+            --muted: #97a4b0;
+            --border: #25313b;
+            --border-strong: #34434f;
+            --primary: #4fb3b5;
+            --primary-600: #6ec6c8;
+            --primary-50: #152e2e;
+            --on-primary: #06201f;
+            --ok: #4ade80;
+            --ok-bg: #11301d;
+            --web: #86b4ff;
+            --web-bg: #16284a;
+            --bad: #ff7b7b;
+            --bad-bg: #3d1719;
+            --unk: #9ba6b1;
+            --unk-bg: #212c35;
+            --warn: #fbbf24;
+            --warn-bg: #3a2c0d;
+            --shadow: 0 1px 2px rgba(0, 0, 0, .4);
+            --shadow-lg: 0 18px 44px rgba(0, 0, 0, .55);
+            color-scheme: dark;
+        }
+
+        /* ============================================ */
+        /* BASE                                         */
+        /* ============================================ */
+        *, *::before, *::after { box-sizing: border-box; }
+
+        html { -webkit-text-size-adjust: 100%; }
+
+        body {
+            margin: 0;
+            font-family: var(--font);
+            font-size: 14px;
+            line-height: 1.45;
+            background: var(--bg);
+            color: var(--text);
+        }
+
+        button, input, select, textarea { font: inherit; color: inherit; }
+        button { cursor: pointer; }
+        a { color: var(--primary); }
+        .mono { font-family: var(--mono); font-size: 13px; }
+        .muted { color: var(--muted); }
+        .icon { width: 1em; height: 1em; flex-shrink: 0; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+        .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+        :focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+        kbd {
+            font-family: var(--mono);
+            font-size: 11px;
+            padding: 1px 6px;
+            border: 1px solid var(--border-strong);
+            border-bottom-width: 2px;
+            border-radius: 5px;
+            background: var(--surface-2);
+            color: var(--muted);
+        }
+        mark { background: #ffe58a; color: inherit; border-radius: 2px; padding: 0 1px; }
+        :root.dark mark { background: #6b5610; }
+
+        .skip {
+            position: fixed; left: 12px; top: -60px; z-index: 200;
+            background: var(--primary); color: var(--on-primary);
+            padding: 10px 14px; border-radius: 8px; text-decoration: none; font-weight: 600;
+        }
+        .skip:focus { top: 12px; }
+
+        /* ============================================ */
+        /* BOTONES                                      */
+        /* ============================================ */
+        .btn {
+            display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+            height: 36px; padding: 0 14px;
+            border: 1px solid var(--border-strong); border-radius: 8px;
+            background: var(--surface); color: var(--text);
+            font-weight: 600; font-size: 13.5px; white-space: nowrap;
+            transition: background .15s, border-color .15s, color .15s;
+        }
+        .btn:hover { background: var(--surface-3); }
+        .btn:disabled { opacity: .5; cursor: not-allowed; }
+        .btn .icon { font-size: 16px; }
+        .btn-primary { background: var(--primary); border-color: var(--primary); color: var(--on-primary); }
+        .btn-primary:hover { background: var(--primary-600); border-color: var(--primary-600); }
+        .btn-danger { background: var(--bad); border-color: var(--bad); color: #fff; }
+        .btn-danger:hover { filter: brightness(.92); background: var(--bad); }
+        .btn-ghost { background: transparent; border-color: transparent; }
+        .btn-ghost:hover { background: var(--surface-3); }
+        .btn-sm { height: 30px; padding: 0 10px; font-size: 12.5px; }
+        .btn-icon { width: 36px; padding: 0; }
+        .btn-sm.btn-icon { width: 30px; }
+
+        /* Aliases de los estilos anteriores (modales y toasts) */
+        .btn-success { background: var(--ok); border-color: var(--ok); color: #fff; }
+        :root.dark .btn-success { color: #04220f; }
+        .btn-warning { background: var(--warn-bg); border-color: var(--warn); color: var(--warn); }
+        .btn-light { background: var(--surface); }
+
+        /* ============================================ */
+        /* CABECERA                                     */
+        /* ============================================ */
+        .top {
+            position: sticky; top: 0; z-index: 40;
+            height: var(--header-h);
+            display: flex; align-items: center; gap: 16px;
+            padding: 0 20px;
+            background: var(--surface);
+            border-bottom: 1px solid var(--border);
+        }
+
+        .brand { display: flex; align-items: center; gap: 10px; min-width: 0; flex-shrink: 0; user-select: none; }
+        .brand-logo {
+            width: 34px; height: 34px; border-radius: 9px;
+            display: grid; place-items: center;
+            background: var(--primary); color: var(--on-primary); font-size: 19px;
+        }
+        .brand h1 { margin: 0; font-size: 16px; line-height: 1.15; cursor: pointer; }
+        .brand small { display: block; color: var(--muted); font-size: 12px; }
+        .role-badge { font-weight: 600; }
+
+        .search {
+            position: relative; flex: 1; max-width: 620px;
+            display: flex; align-items: center;
+        }
+        .search > .icon { position: absolute; left: 12px; font-size: 17px; color: var(--muted); pointer-events: none; }
+        .search input {
+            width: 100%; height: 40px;
+            padding: 0 88px 0 38px;
+            border: 1px solid var(--border-strong); border-radius: 10px;
+            background: var(--surface-2);
+            font-size: 15px;
+        }
+        .search input:focus { outline: none; border-color: var(--primary); background: var(--surface); box-shadow: 0 0 0 3px var(--primary-50); }
+        .search input::-webkit-search-cancel-button { display: none; }
+        .search-extra { position: absolute; right: 8px; display: flex; align-items: center; gap: 6px; }
+        .search-clear { display: none; border: 0; background: none; color: var(--muted); padding: 4px; border-radius: 6px; }
+        .search-clear:hover { background: var(--surface-3); color: var(--text); }
+        .search.con-texto .search-clear { display: inline-flex; }
+        .search.con-texto kbd { display: none; }
+
+        .top-actions { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+
+        .srv {
+            display: inline-flex; align-items: center; gap: 7px;
+            height: 36px; padding: 0 10px;
+            border: 1px solid var(--border); border-radius: 8px; background: var(--surface);
+            font-size: 12.5px; color: var(--muted); font-weight: 600;
+        }
+        .srv i { width: 9px; height: 9px; border-radius: 50%; background: var(--unk); }
+        .srv.ok i { background: var(--ok); }
+        .srv.ko { color: var(--bad); border-color: var(--bad); }
+        .srv.ko i { background: var(--bad); }
+
+        .btn-vigilar[aria-pressed="true"] { background: var(--primary-50); border-color: var(--primary); color: var(--primary); }
+        .btn-vigilar[aria-pressed="true"] .icon { animation: latido 2s ease-in-out infinite; }
+        @keyframes latido { 50% { opacity: .35; } }
+        .tiempo-vig { font-family: var(--mono); font-size: 12px; font-weight: 500; }
+
+        .menu { position: relative; }
+        .menu-list {
+            position: absolute; right: 0; top: calc(100% + 6px); z-index: 60;
+            min-width: 290px; padding: 6px;
+            background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+            box-shadow: var(--shadow-lg);
+            display: none;
+        }
+        .menu.abierto .menu-list { display: block; }
+        .menu-list button {
+            display: flex; align-items: center; gap: 10px; width: 100%;
+            padding: 9px 10px; border: 0; border-radius: 8px; background: none; text-align: left;
+        }
+        .menu-list button:hover, .menu-list button:focus-visible { background: var(--surface-3); outline: none; }
+        .menu-list button .icon { font-size: 17px; color: var(--muted); }
+        .menu-list button small { margin-left: auto; color: var(--muted); }
+        .menu-list hr { border: 0; border-top: 1px solid var(--border); margin: 6px 4px; }
+        .menu-list .badge-cambios { white-space: nowrap; margin-left: auto; background: var(--warn-bg); color: var(--warn); font-size: 11.5px; font-weight: 700; padding: 1px 7px; border-radius: 99px; }
+
+        /* Progreso de comprobación */
+        .progreso {
+            position: sticky; top: var(--header-h); z-index: 39;
+            display: none; align-items: center; gap: 12px;
+            padding: 8px 20px;
+            background: var(--primary-50); border-bottom: 1px solid var(--border);
+            font-size: 13px; font-weight: 600;
+        }
+        .progreso.activo { display: flex; }
+        .progreso-barra { flex: 1; max-width: 420px; height: 6px; border-radius: 6px; background: var(--border); overflow: hidden; }
+        .progreso-barra i { display: block; height: 100%; width: 0; background: var(--primary); transition: width .2s; }
+
+        .banner-error {
+            display: none;
+            margin: 14px 20px 0;
+            padding: 12px 14px;
+            border: 1px solid var(--bad); border-radius: var(--radius);
+            background: var(--bad-bg); color: var(--bad);
+            font-weight: 600;
+            align-items: center; gap: 10px; flex-wrap: wrap;
+        }
+        .banner-error.activo { display: flex; }
+        .banner-error span { flex: 1; min-width: 240px; }
+        .banner-error code { font-family: var(--mono); font-size: 12.5px; }
+
+        /* ============================================ */
+        /* LAYOUT                                       */
+        /* ============================================ */
+        .app {
+            display: grid;
+            grid-template-columns: 236px minmax(0, 1fr);
+            gap: 20px;
+            padding: 18px 20px 90px;
+            transition: margin-right .25s ease;
+        }
+
+        .side {
+            position: sticky; top: calc(var(--header-h) + 18px);
+            align-self: start;
+            max-height: calc(100vh - var(--header-h) - 36px);
+            overflow: auto;
+            display: flex; flex-direction: column; gap: 18px;
+            padding-right: 4px;
+        }
+        .side h2 {
+            margin: 0 0 6px; padding: 0 8px;
+            font-size: 11.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted);
+        }
+        .side ul { list-style: none; margin: 0; padding: 0; }
+        .side-item {
+            display: flex; align-items: center; gap: 8px; width: 100%;
+            padding: 6px 8px; border: 0; border-radius: 7px; background: none; text-align: left;
+            font-size: 13px;
+        }
+        .side-item:hover { background: var(--surface-3); }
+        .side-item[aria-pressed="true"] { background: var(--primary); color: var(--on-primary); }
+        .side-item span:first-child { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .side-item .n { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+        .side-item[aria-pressed="true"] .n { color: inherit; opacity: .85; }
+        .side-item .caidas { background: var(--bad); color: #fff; font-size: 11px; font-weight: 700; border-radius: 99px; padding: 0 6px; }
+        .side-reciente span:first-child small { display: block; color: var(--muted); font-size: 11.5px; }
+        .side-vacio { padding: 4px 8px; color: var(--muted); font-size: 12.5px; }
+
+        .chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 4px; }
+        .chip {
+            display: inline-flex; align-items: center; gap: 6px;
+            height: 30px; padding: 0 11px;
+            border: 1px solid var(--border-strong); border-radius: 99px;
+            background: var(--surface); font-size: 12.5px; font-weight: 600;
+        }
+        .chip:hover { background: var(--surface-3); }
+        .chip[aria-pressed="true"] { background: var(--primary); border-color: var(--primary); color: var(--on-primary); }
+        .chip .n { font-weight: 500; opacity: .75; font-variant-numeric: tabular-nums; }
+        .chip .dot { width: 8px; height: 8px; border-radius: 50%; }
+
+        /* ============================================ */
+        /* RESUMEN Y CABECERA DEL LISTADO               */
+        /* ============================================ */
+        .resumen { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 12px; }
+        .resumen .ultima { margin-left: auto; color: var(--muted); font-size: 12.5px; display: flex; align-items: center; gap: 10px; }
+
+        .dot-online { background: var(--ok); }
+        .dot-web { background: var(--web); }
+        .dot-offline { background: var(--bad); }
+        .dot-desconocido { background: var(--unk); opacity: .6; }
+        .dot-sinip { background: transparent; border: 1.5px dashed var(--unk); }
+        .chip[aria-pressed="true"] .dot { box-shadow: 0 0 0 2px var(--on-primary); }
+
+        .list-head {
+            display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+            margin-bottom: 10px;
+        }
+        .list-head h2 { margin: 0; font-size: 17px; }
+        .contador { color: var(--muted); font-size: 13px; }
+        .activos { display: flex; flex-wrap: wrap; gap: 6px; }
+        .activo-pill {
+            display: inline-flex; align-items: center; gap: 5px;
+            padding: 3px 6px 3px 10px; border-radius: 99px;
+            background: var(--primary-50); color: var(--primary); font-size: 12.5px; font-weight: 600;
+            border: 0;
+        }
+        .activo-pill .icon { font-size: 13px; }
+        .activo-pill:hover { filter: brightness(.95); }
+        .list-head .derecha { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+
+        .segmentado { display: inline-flex; border: 1px solid var(--border-strong); border-radius: 8px; overflow: hidden; }
+        .segmentado button { border: 0; background: var(--surface); height: 32px; width: 36px; display: grid; place-items: center; }
+        .segmentado button + button { border-left: 1px solid var(--border-strong); }
+        .segmentado button[aria-pressed="true"] { background: var(--primary-50); color: var(--primary); }
+        .segmentado .icon { font-size: 16px; }
+
+        /* ============================================ */
+        /* TABLA                                        */
+        /* ============================================ */
+        .tabla-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow); }
+        table { width: 100%; border-collapse: separate; border-spacing: 0; }
+        thead th {
+            position: sticky; top: var(--header-h); z-index: 5;
+            background: var(--surface-2);
+            border-bottom: 1px solid var(--border);
+            padding: 0 10px; height: 38px;
+            text-align: left; font-size: 12px; font-weight: 700; color: var(--muted);
+            text-transform: uppercase; letter-spacing: .04em; white-space: nowrap;
+        }
+        body.con-progreso thead th { top: calc(var(--header-h) + 37px); }
+        thead th:first-child { border-top-left-radius: 12px; }
+        thead th:last-child { border-top-right-radius: 12px; }
+        .th-sort { border: 0; background: none; padding: 0; font: inherit; color: inherit; text-transform: inherit; letter-spacing: inherit; display: inline-flex; align-items: center; gap: 4px; }
+        .th-sort:hover { color: var(--text); }
+        .th-sort .flecha { opacity: 0; font-size: 11px; }
+        .th-sort[data-dir] .flecha { opacity: 1; color: var(--primary); }
+
+        tbody td { padding: 7px 10px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+        tbody tr:last-child td { border-bottom: 0; }
+        tbody tr.row { cursor: pointer; }
+        tbody tr.row:hover td { background: var(--surface-2); }
+        tbody tr.row.activa td { background: var(--primary-50); }
+        tbody tr.row.activa td:first-child { box-shadow: inset 3px 0 0 var(--primary); }
+        tbody tr.row.sel td { background: color-mix(in srgb, var(--primary-50) 70%, transparent); }
+        tbody tr.row:focus { outline: none; }
+        tbody tr.row:focus-visible td { background: var(--primary-50); }
+
+        .c-sel { width: 34px; padding-right: 0 !important; }
+        .c-sel input { width: 16px; height: 16px; accent-color: var(--primary); cursor: pointer; }
+        .c-fav { width: 34px; padding: 0 !important; text-align: center; }
+        .c-estado { width: 150px; }
+        .c-id { width: 64px; color: var(--muted); }
+        .c-lugar b { display: block; font-weight: 600; }
+        .c-lugar span { color: var(--muted); font-size: 12.5px; }
+        .c-equipo b { display: block; font-weight: 600; }
+        .c-equipo span { color: var(--muted); font-size: 12.5px; }
+        .c-ip { width: 150px; }
+        .c-serie { width: 130px; color: var(--muted); }
+        .c-info { width: 54px; color: var(--muted); white-space: nowrap; }
+        .c-acc { width: 150px; text-align: right; white-space: nowrap; }
+
+        .fav {
+            border: 0; background: none; width: 30px; height: 30px; border-radius: 7px;
+            color: var(--border-strong); display: inline-grid; place-items: center;
+        }
+        .fav .icon { font-size: 17px; }
+        .fav:hover { background: var(--surface-3); color: var(--warn); }
+        .fav.on { color: #e3a008; }
+        .fav.on .icon { fill: currentColor; }
+
+        .st { display: inline-flex; align-items: center; gap: 7px; font-weight: 600; font-size: 13px; white-space: nowrap; }
+        .st i { width: 9px; height: 9px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
+        .st-online { color: var(--ok); }
+        .st-web { color: var(--web); }
+        .st-offline { color: var(--bad); }
+        .st-offline i { box-shadow: 0 0 0 3px var(--bad-bg); }
+        .st-desconocido { color: var(--unk); font-weight: 500; }
+        .st-desconocido i { opacity: .55; }
+        .st-sinip { color: var(--unk); font-weight: 500; }
+        .st-sinip i { background: transparent; border: 1.5px dashed currentColor; }
+        .st-comprobando { color: var(--warn); }
+        .st-comprobando i { background: transparent; border: 2px solid currentColor; border-right-color: transparent; animation: giro .7s linear infinite; }
+        @keyframes giro { to { transform: rotate(360deg); } }
+        .st-sub { display: block; margin-top: 1px; font-size: 11.5px; color: var(--muted); font-weight: 400; }
+        .st-sub.viejo { opacity: .7; }
+
+        .ip-btn {
+            border: 0; background: none; padding: 2px 6px; margin-left: -6px; border-radius: 6px;
+            font-family: var(--mono); font-size: 13px;
+            display: inline-flex; align-items: center; gap: 6px;
+        }
+        .ip-btn .icon { font-size: 13px; opacity: 0; color: var(--muted); }
+        .ip-btn:hover { background: var(--surface-3); }
+        .ip-btn:hover .icon { opacity: 1; }
+        .ip-rara { color: var(--warn); font-family: var(--mono); font-size: 12.5px; }
+
+        .acc { display: inline-flex; gap: 4px; }
+        .acc .btn { height: 30px; padding: 0 9px; font-size: 12.5px; }
+        .acc .btn .icon { font-size: 14px; }
+        a.btn { text-decoration: none; }
+
+        .etq {
+            display: inline-block; font-size: 11px; font-weight: 700; letter-spacing: .02em;
+            padding: 1px 7px; border-radius: 99px; background: var(--warn-bg); color: var(--warn);
+            vertical-align: 1px;
+        }
+
+        .sin-resultados { padding: 48px 20px; text-align: center; color: var(--muted); }
+        .sin-resultados b { display: block; color: var(--text); font-size: 15px; margin-bottom: 6px; }
+
+        /* Tarjetas */
+        .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(270px, 1fr)); gap: 12px; }
+        .card {
+            position: relative;
+            display: flex; flex-direction: column; gap: 8px;
+            padding: 14px; border-radius: 12px;
+            background: var(--surface); border: 1px solid var(--border); box-shadow: var(--shadow);
+            cursor: pointer;
+        }
+        .card:hover { border-color: var(--border-strong); }
+        .card.activa { border-color: var(--primary); box-shadow: 0 0 0 1px var(--primary); }
+        .card.sel { background: var(--primary-50); }
+        .card-top { display: flex; align-items: flex-start; gap: 8px; }
+        .card-top .titulo { flex: 1; min-width: 0; }
+        .card-top .titulo b { display: block; font-size: 15px; }
+        .card-top .titulo span { color: var(--muted); font-size: 13px; }
+        .card-datos { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 13px; color: var(--muted); }
+        .card-datos .mono { color: var(--text); }
+        .card .acc { margin-top: 2px; }
+        .card .c-sel-card { position: absolute; top: 14px; right: 44px; }
+        .card .c-sel-card input { width: 16px; height: 16px; accent-color: var(--primary); }
+
+        .paginacion { display: flex; justify-content: center; align-items: center; flex-wrap: wrap; gap: 6px; padding: 14px; }
+        .pag-btn { min-width: 34px; height: 32px; border-radius: 8px; border: 1px solid var(--border-strong); background: var(--surface); font-weight: 600; }
+        .pag-btn.activo { background: var(--primary); border-color: var(--primary); color: var(--on-primary); }
+        .pag-btn:disabled { opacity: .4; cursor: not-allowed; }
+        .pag-info { color: var(--muted); font-size: 13px; padding: 0 6px; }
+
+        /* ============================================ */
+        /* FICHA LATERAL                                */
+        /* ============================================ */
+        .ficha {
+            position: fixed; top: var(--header-h); right: 0; bottom: 0; z-index: 45;
+            width: min(var(--ficha-w), 100vw);
+            background: var(--surface);
+            border-left: 1px solid var(--border);
+            box-shadow: var(--shadow-lg);
+            transform: translateX(105%);
+            transition: transform .22s ease;
+            display: flex; flex-direction: column;
+            visibility: hidden;
+        }
+        .ficha.abierta { transform: none; visibility: visible; }
+        @media (min-width: 1400px) {
+            body.con-ficha .app { margin-right: var(--ficha-w); }
+            body.con-ficha .c-serie, body.con-ficha .c-info { display: none; }
+            .ficha { box-shadow: none; }
+        }
+        @media (min-width: 1400px) and (max-width: 1799px) {
+            body.con-ficha .c-acc { display: none; }
+        }
+        .ficha-head {
+            display: flex; align-items: flex-start; gap: 10px;
+            padding: 16px 18px 12px;
+            border-bottom: 1px solid var(--border);
+        }
+        .ficha-head .titulo { flex: 1; min-width: 0; }
+        .ficha-head h2 { margin: 4px 0 2px; font-size: 19px; line-height: 1.2; }
+        .ficha-head p { margin: 0; color: var(--muted); }
+        .ficha-nav { display: flex; gap: 2px; }
+        .ficha-body { flex: 1; overflow: auto; padding: 16px 18px 28px; display: flex; flex-direction: column; gap: 18px; }
+        .ficha-acciones { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+        .ficha-acciones .btn { height: 40px; min-width: 0; padding: 0 8px; }
+        .ficha-acciones .btn-primary { grid-column: span 1; }
+
+        .bloque h3 {
+            display: flex; align-items: center; gap: 8px;
+            margin: 0 0 8px; font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted);
+        }
+        .bloque h3 .der { margin-left: auto; text-transform: none; letter-spacing: 0; font-weight: 500; }
+
+        .datos { display: grid; grid-template-columns: auto 1fr auto; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+        .datos > * { padding: 8px 12px; border-bottom: 1px solid var(--border); display: flex; align-items: center; min-height: 40px; }
+        .datos > *:nth-last-child(-n+3) { border-bottom: 0; }
+        .datos dt { color: var(--muted); font-size: 12.5px; background: var(--surface-2); }
+        .datos dd { margin: 0; font-weight: 600; word-break: break-word; }
+        .datos .copiar-cel { padding: 0 6px; justify-content: flex-end; }
+
+        .estado-box {
+            display: flex; align-items: center; gap: 12px;
+            padding: 12px 14px; border-radius: 10px; border: 1px solid var(--border);
+        }
+        .estado-box.e-online { background: var(--ok-bg); border-color: transparent; }
+        .estado-box.e-web { background: var(--web-bg); border-color: transparent; }
+        .estado-box.e-offline { background: var(--bad-bg); border-color: transparent; }
+        .estado-box .st { font-size: 15px; }
+        .estado-box .info { flex: 1; min-width: 0; font-size: 12.5px; color: var(--muted); }
+
+        .hist { display: flex; align-items: flex-end; gap: 2px; height: 34px; padding: 4px 0; }
+        .hist i { flex: 1; min-width: 3px; max-width: 10px; height: 100%; border-radius: 2px; background: var(--unk-bg); }
+        .hist i.online { background: var(--ok); }
+        .hist i.web { background: var(--web); }
+        .hist i.offline { background: var(--bad); height: 55%; }
+        .hist-leyenda { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); }
+
+        .nota-fija textarea, .inc-form textarea, .form-grid input, .form-grid select, .modal input, .modal select, .modal textarea {
+            width: 100%;
+            border: 1px solid var(--border-strong); border-radius: 8px;
+            background: var(--surface); padding: 8px 10px;
+        }
+        .nota-fija textarea:focus, .inc-form textarea:focus, .form-grid input:focus, .modal input:focus, .modal select:focus, .modal textarea:focus {
+            outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-50);
+        }
+        .nota-fija textarea { min-height: 64px; resize: vertical; }
+        .fila-botones { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; align-items: center; }
+        .fila-botones .pista { margin-right: auto; font-size: 12px; color: var(--muted); }
+
+        .inc-form textarea { min-height: 56px; resize: vertical; }
+        .inc-lista { list-style: none; margin: 12px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+        .inc-lista li {
+            position: relative;
+            padding: 9px 36px 9px 12px; border-radius: 9px;
+            background: var(--surface-2); border: 1px solid var(--border);
+            white-space: pre-wrap; word-break: break-word;
+        }
+        .inc-lista li small { display: block; color: var(--muted); font-size: 11.5px; margin-bottom: 2px; }
+        .inc-lista li .borrar { position: absolute; top: 6px; right: 6px; }
+        .inc-lista li .borrar.confirmar { color: var(--bad); width: auto; padding: 0 8px; }
+
+        .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        .form-grid label { display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; font-weight: 600; color: var(--muted); }
+        .form-grid .full { grid-column: 1 / -1; }
+        .form-grid input.error { border-color: var(--bad); box-shadow: 0 0 0 3px var(--bad-bg); }
+        .form-error { color: var(--bad); font-size: 12.5px; font-weight: 600; min-height: 1em; }
+
+        .fondo-ficha { display: none; }
+
+        /* ============================================ */
+        /* BARRA DE SELECCIÓN                           */
+        /* ============================================ */
+        .lote {
+            position: fixed; left: 50%; bottom: 18px; z-index: 55;
+            transform: translate(-50%, 140%);
+            display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: center;
+            max-width: calc(100vw - 24px);
+            padding: 8px 10px 8px 16px; border-radius: 14px;
+            background: #1b2630; color: #fff; box-shadow: var(--shadow-lg);
+            transition: transform .2s ease;
+        }
+        .lote.activo { transform: translate(-50%, 0); }
+        .lote strong { margin-right: 6px; }
+        .lote .btn { background: rgba(255, 255, 255, .08); border-color: rgba(255, 255, 255, .16); color: #fff; height: 32px; }
+        .lote .btn:hover { background: rgba(255, 255, 255, .16); }
+
+        /* ============================================ */
+        /* TOASTS                                       */
+        /* ============================================ */
+        .toast-container { position: fixed; right: 18px; bottom: 18px; z-index: 300; display: flex; flex-direction: column; gap: 8px; max-width: min(420px, calc(100vw - 36px)); }
+        .toast {
+            display: flex; align-items: center; gap: 10px;
+            padding: 11px 12px 11px 14px; border-radius: 10px;
+            background: var(--surface); border: 1px solid var(--border); border-left: 4px solid var(--primary);
+            box-shadow: var(--shadow-lg); font-weight: 500;
+            animation: toastEntra .2s ease;
+        }
+        .toast span { flex: 1; }
+        .toast-success { border-left-color: var(--ok); }
+        .toast-danger { border-left-color: var(--bad); }
+        .toast-warning { border-left-color: var(--warn); }
+        .toast .btn { height: 28px; font-size: 12.5px; }
+        .toast.sale { opacity: 0; transform: translateY(6px); transition: all .2s; }
+        @keyframes toastEntra { from { opacity: 0; transform: translateY(8px); } }
+
+        /* ============================================ */
+        /* MODAL                                        */
+        /* ============================================ */
+        .modal-overlay {
+            position: fixed; inset: 0; z-index: 100;
+            display: none; align-items: flex-start; justify-content: center;
+            padding: 8vh 16px 16px;
+            background: rgba(10, 16, 22, .5);
+        }
+        .modal-overlay.activo { display: flex; }
+        .modal {
+            width: min(560px, 100%); max-height: 84vh;
+            display: flex; flex-direction: column;
+            background: var(--surface); border-radius: 14px; box-shadow: var(--shadow-lg);
+        }
+        .modal.modal-grande { width: min(860px, 100%); }
+        .modal-titulo { display: flex; align-items: center; gap: 10px; padding: 16px 18px; border-bottom: 1px solid var(--border); }
+        .modal-titulo h3 { margin: 0; font-size: 17px; flex: 1; }
+        .modal-body { padding: 16px 18px; overflow: auto; }
+        .modal-body p { margin: 0 0 10px; }
+        .modal-body label { display: block; font-weight: 600; margin: 12px 0 4px; }
+        .modal-body label:first-child { margin-top: 0; }
+        .modal-body .ayuda-campo { color: var(--muted); font-size: 12.5px; margin-top: 4px; }
+        .modal-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 8px; padding: 12px 18px; border-top: 1px solid var(--border); }
+        .modal-actions:empty { display: none; }
+        .modal table { font-size: 13px; }
+        .modal td, .modal th { padding: 6px 8px; border-bottom: 1px solid var(--border); text-align: left; }
+
+        .logs-list { display: flex; flex-direction: column; gap: 6px; }
+        .log-item { padding: 8px 12px; border-radius: 8px; background: var(--surface-2); border-left: 3px solid var(--unk); }
+        .log-success { border-left-color: var(--ok); }
+        .log-warning { border-left-color: var(--warn); }
+        .log-danger { border-left-color: var(--bad); }
+        .log-time { font-size: 11.5px; color: var(--muted); }
+
+        .qr-container { display: flex; gap: 18px; align-items: center; flex-wrap: wrap; }
+        .qr-image { width: 220px; height: 220px; background: #fff; padding: 8px; border-radius: 10px; border: 1px solid var(--border); }
+        .qr-image svg { width: 100%; height: 100%; display: block; }
+        .qr-info { flex: 1; min-width: 200px; }
+
+        .revisar-grupo { margin-bottom: 18px; }
+        .revisar-grupo h4 { margin: 0 0 6px; display: flex; gap: 8px; align-items: center; }
+        .revisar-grupo p { color: var(--muted); font-size: 12.5px; }
+        .lista-links { display: flex; flex-wrap: wrap; gap: 6px; }
+        .lista-links button { border: 1px solid var(--border-strong); background: var(--surface); border-radius: 7px; padding: 4px 9px; font-size: 12.5px; }
+        .lista-links button:hover { border-color: var(--primary); color: var(--primary); }
+
+        .atajos { width: 100%; border-collapse: collapse; }
+        .atajos td { padding: 6px 8px; border-bottom: 1px solid var(--border); }
+        .atajos td:first-child { white-space: nowrap; width: 1%; }
+        .ayuda h4 { margin: 18px 0 6px; }
+        .ayuda h4:first-child { margin-top: 0; }
+        .ayuda code { font-family: var(--mono); font-size: 12.5px; background: var(--surface-3); padding: 1px 5px; border-radius: 4px; }
+        .ayuda ul { margin: 0; padding-left: 20px; line-height: 1.7; }
+
+        /* ============================================ */
+        /* ROLES                                        */
+        /* ============================================ */
+        .role-lector [data-rol~="editor"],
+        .role-lector [data-rol~="admin"],
+        .role-tecnico [data-rol~="admin"] { display: none !important; }
+
+        /* ============================================ */
+        /* RESPONSIVE                                   */
+        /* ============================================ */
+        @media (max-width: 1280px) {
+            .c-serie { display: none; }
+        }
+        @media (max-width: 1100px) {
+            .app { grid-template-columns: minmax(0, 1fr); }
+            .side {
+                position: static; max-height: none; overflow: visible;
+                flex-direction: row; flex-wrap: wrap; gap: 12px; padding: 0;
+            }
+            .side section { flex: 1 1 100%; min-width: 0; }
+            .side ul { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px; scrollbar-width: thin; }
+            .side-item { width: auto; flex-shrink: 0; border: 1px solid var(--border-strong); border-radius: 99px; padding: 5px 11px; background: var(--surface); }
+            .side-reciente span:first-child small { display: none; }
+            .side .chips { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 4px; }
+            .side .chip { flex-shrink: 0; }
+            .side h2 { padding: 0; }
+            .c-info { display: none; }
+        }
+        @media (max-width: 900px) {
+            .top { gap: 10px; padding: 0 12px; }
+            .brand small, .brand h1 .txt-largo { display: none; }
+            .ocultar-md { display: none !important; }
+            .app { padding: 14px 12px 90px; }
+            .banner-error { margin: 12px 12px 0; }
+        }
+        @media (max-width: 760px) {
+            :root { --header-h: 108px; }
+            .top { flex-wrap: wrap; height: auto; min-height: var(--header-h); padding: 10px 12px; row-gap: 8px; }
+            .search { order: 3; flex: 1 1 100%; max-width: none; }
+            .search kbd { display: none; }
+            .top-actions { gap: 6px; }
+            .ocultar-sm { display: none !important; }
+            .ficha { top: 0; width: 100vw; z-index: 70; }
+            .fondo-ficha.activo { display: block; position: fixed; inset: 0; z-index: 69; background: rgba(0, 0, 0, .4); }
+            .resumen .ultima { margin-left: 0; width: 100%; }
+            .form-grid { grid-template-columns: 1fr; }
+            .ficha-acciones { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+            .toast-container { left: 12px; right: 12px; bottom: 12px; max-width: none; }
+            .lote { bottom: 12px; }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after { transition-duration: 0s !important; animation-duration: 0s !important; }
+        }
+
+        /* ============================================ */
+        /* IMPRESIÓN: solo el listado                   */
+        /* ============================================ */
+        @media print {
+            .top, .progreso, .side, .resumen, .list-head .derecha, .ficha, .lote, .toast-container, .banner-error, .c-sel, .c-fav, .c-acc, .paginacion, .skip, .activos { display: none !important; }
+            body { background: #fff; color: #000; font-size: 11px; }
+            .app { display: block; padding: 0; margin: 0 !important; }
+            .tabla-card { border: 0; box-shadow: none; }
+            thead th { position: static; background: #eee; color: #000; }
+            tbody td { padding: 4px 6px; }
+            .c-serie, .c-info { display: table-cell !important; }
+            #vistaCards { display: none !important; }
+            #vistaTabla { display: block !important; }
+            .imprimir-cabecera { display: block !important; margin-bottom: 8px; }
+        }
+        .imprimir-cabecera { display: none; }
+
+        /* ============================================ */
+        /* EASTER EGG                                   */
+        /* ============================================ */
+        @keyframes easterEggPulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.15); }
+        }
+        @keyframes easterEggGlow {
+            0% { box-shadow: 0 0 20px rgba(251, 191, 36, 0.3); }
+            50% { box-shadow: 0 0 60px rgba(251, 191, 36, 0.9); }
+            100% { box-shadow: 0 0 20px rgba(251, 191, 36, 0.3); }
+        }
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        @keyframes slideInEasterEgg {
+            0% { opacity: 0; transform: scale(0.3) translateY(-100px) rotateX(90deg); }
+            100% { opacity: 1; transform: scale(1) translateY(0) rotateX(0); }
+        }
+        @keyframes slideOutEasterEgg {
+            0% { opacity: 1; transform: scale(1); }
+            100% { opacity: 0; transform: scale(0.3) translateY(100px); }
+        }
+        .easter-egg-container {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            display: flex; justify-content: center; align-items: center;
+            z-index: 99999; pointer-events: auto;
+            backdrop-filter: blur(5px);
+            background: rgba(0, 0, 0, 0.6);
+        }
+        .easter-egg-content {
+            background: linear-gradient(135deg, lightgreen, white, lightblue);
+            color: black;
+            padding: 60px 80px;
+            border-radius: 40px;
+            text-align: center;
+            box-shadow: 0 50px 120px rgba(0, 0, 0, 0.7);
+            font-weight: 900;
+            letter-spacing: 2px;
+            animation: easterEggGlow 1.2s ease-in-out infinite;
+            cursor: pointer;
+            transform: scale(0.3);
+            opacity: 0;
+            transition: all 0.3s ease;
+            max-width: 90vw;
+            max-height: 90vh;
+        }
+        .easter-egg-content.active {
+            animation: easterEggGlow 1.2s ease-in-out infinite, slideInEasterEgg 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+        }
+        .easter-egg-content:hover { transform: scale(1.05); }
+    </style>
+</head>
+
+<body class="role-admin">
+
+    <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+        <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></symbol>
+        <symbol id="i-printer" viewBox="0 0 24 24"><path d="M6 9V3h12v6"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="7"/></symbol>
+        <symbol id="i-ping" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 4v5h-5"/></symbol>
+        <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a14 14 0 0 1 0 18 14 14 0 0 1 0-18z"/></symbol>
+        <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"/></symbol>
+        <symbol id="i-star" viewBox="0 0 24 24"><path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2L12 17.3l-5.6 2.9 1.1-6.2L3 9.6l6.2-.9z"/></symbol>
+        <symbol id="i-qr" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3h-3zM20 14v.01M14 20h.01M17 20h4v-3"/></symbol>
+        <symbol id="i-edit" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></symbol>
+        <symbol id="i-trash" viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="m19 6-1 14H6L5 6"/></symbol>
+        <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></symbol>
+        <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></symbol>
+        <symbol id="i-moon" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></symbol>
+        <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M6.3 17.7l-1.4 1.4M19.1 4.9l-1.4 1.4"/></symbol>
+        <symbol id="i-more" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></symbol>
+        <symbol id="i-download" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/></symbol>
+        <symbol id="i-upload" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m17 8-5-5-5 5"/><path d="M12 3v12"/></symbol>
+        <symbol id="i-clip" viewBox="0 0 24 24"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M9 12h6M9 16h4"/></symbol>
+        <symbol id="i-note" viewBox="0 0 24 24"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M8 13h8M8 17h5"/></symbol>
+        <symbol id="i-alert" viewBox="0 0 24 24"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></symbol>
+        <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+        <symbol id="i-chev-up" viewBox="0 0 24 24"><path d="m18 15-6-6-6 6"/></symbol>
+        <symbol id="i-chev-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+        <symbol id="i-list" viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></symbol>
+        <symbol id="i-grid" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></symbol>
+        <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></symbol>
+        <symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></symbol>
+        <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+        <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+        <symbol id="i-save" viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/></symbol>
+        <symbol id="i-undo" viewBox="0 0 24 24"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-15-6.7L3 13"/></symbol>
+        <symbol id="i-list-check" viewBox="0 0 24 24"><path d="M11 6h10M11 12h10M11 18h10"/><path d="m3 6 1.5 1.5L7 5M3 12l1.5 1.5L7 11M3 18l1.5 1.5L7 17"/></symbol>
+    </svg>
+
+    <a class="skip" href="#lista">Saltar al listado</a>
+
+    <!-- ============================================ -->
+    <!-- CABECERA                                     -->
+    <!-- ============================================ -->
+    <header class="top">
+        <div class="brand">
+            <span class="brand-logo" aria-hidden="true"><svg class="icon"><use href="#i-printer"/></svg></span>
+            <div>
+                <h1 id="tituloApp">Impresoras<span class="txt-largo"> · Informática</span></h1>
+                <small>Panel de gestión · <span class="role-badge" id="roleBadge">Administrador</span></small>
+            </div>
+        </div>
+
+        <div class="search" id="cajaBusqueda">
+            <svg class="icon" aria-hidden="true"><use href="#i-search"/></svg>
+            <input type="search" id="buscar" placeholder="Buscar lugar, modelo, IP, n.º de serie o ID…" autocomplete="off" spellcheck="false" aria-label="Buscar impresoras" aria-describedby="ayudaBuscar">
+            <span class="search-extra">
+                <kbd title="Pulsa / para buscar desde cualquier sitio">/</kbd>
+                <button class="search-clear" data-accion="borrar-busqueda" aria-label="Borrar búsqueda"><svg class="icon"><use href="#i-x"/></svg></button>
+            </span>
+            <span id="ayudaBuscar" class="sr-only">Enter abre la primera impresora. Flecha abajo baja al listado.</span>
+        </div>
+
+        <div class="top-actions">
+            <button class="btn btn-primary" id="btnComprobar" data-accion="comprobar" title="Hacer ping a las impresoras del listado">
+                <svg class="icon"><use href="#i-ping"/></svg><span id="txtComprobar">Comprobar todas</span>
+            </button>
+            <button class="btn btn-vigilar ocultar-sm" id="btnVigilar" data-accion="vigilancia" aria-pressed="false" title="Vigilancia: comprueba sola cada pocos minutos y avisa si alguna deja de responder">
+                <svg class="icon"><use href="#i-eye"/></svg><span class="ocultar-md">Vigilancia</span><span class="tiempo-vig" id="tiempoVig"></span>
+            </button>
+            <button class="srv ocultar-md" id="srvEstado" data-accion="servidor" title="Servidor de ping">
+                <i></i><span id="srvTexto">Servidor…</span>
+            </button>
+            <button class="btn btn-icon btn-ghost" data-accion="tema" id="btnTema" aria-label="Cambiar a modo oscuro" title="Modo claro / oscuro">
+                <svg class="icon"><use href="#i-moon"/></svg>
+            </button>
+            <div class="menu" id="menuMas">
+                <button class="btn btn-icon" data-accion="menu" aria-haspopup="true" aria-expanded="false" aria-label="Más opciones" title="Más opciones">
+                    <svg class="icon"><use href="#i-more"/></svg>
+                </button>
+                <div class="menu-list" role="menu">
+                    <button role="menuitem" data-accion="nueva" data-rol="editor"><svg class="icon"><use href="#i-plus"/></svg>Nueva impresora</button>
+                    <button role="menuitem" data-accion="revisar"><svg class="icon"><use href="#i-list-check"/></svg>Revisar inventario<small id="menuAvisos"></small></button>
+                    <hr>
+                    <button role="menuitem" data-accion="exportar-csv"><svg class="icon"><use href="#i-download"/></svg>Exportar listado (CSV)<small>Ctrl+S</small></button>
+                    <button role="menuitem" data-accion="descargar-datos" data-rol="editor"><svg class="icon"><use href="#i-download"/></svg>Descargar fichero de impresoras<span class="badge-cambios" id="menuCambios" hidden></span></button>
+                    <button role="menuitem" data-accion="importar" data-rol="editor"><svg class="icon"><use href="#i-upload"/></svg>Importar CSV / JSON</button>
+                    <button role="menuitem" data-accion="backup"><svg class="icon"><use href="#i-save"/></svg>Copia de seguridad</button>
+                    <hr>
+                    <button role="menuitem" data-accion="imprimir"><svg class="icon"><use href="#i-printer"/></svg>Imprimir listado<small>Ctrl+P</small></button>
+                    <button role="menuitem" data-accion="logs"><svg class="icon"><use href="#i-note"/></svg>Registro de actividad</button>
+                    <button role="menuitem" data-accion="config"><svg class="icon"><use href="#i-gear"/></svg>Configuración</button>
+                    <button role="menuitem" data-accion="ayuda"><svg class="icon"><use href="#i-help"/></svg>Ayuda y atajos<small>?</small></button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <div class="progreso" id="progreso" role="status" aria-live="polite">
+        <span id="progresoTexto">Comprobando…</span>
+        <div class="progreso-barra"><i id="progresoBarra"></i></div>
+        <button class="btn btn-sm" data-accion="cancelar-ping">Cancelar</button>
+    </div>
+
+    <div class="banner-error" id="bannerError" role="alert">
+        <svg class="icon" style="font-size:18px"><use href="#i-alert"/></svg>
+        <span>No hay conexión con el servidor de ping (<code id="bannerUrl">http://localhost:3000</code>). El estado no se puede comprobar hasta que se inicie <b>INICIAR_SERVIDOR</b>.</span>
+        <button class="btn btn-sm" data-accion="servidor">Reintentar</button>
+        <button class="btn btn-sm" data-accion="config">Configurar</button>
+    </div>
+
+    <!-- ============================================ -->
+    <!-- CONTENIDO                                    -->
+    <!-- ============================================ -->
+    <div class="app" id="app">
+        <aside class="side" aria-label="Filtros rápidos">
+            <section>
+                <h2>Edificios</h2>
+                <ul id="listaEdificios"></ul>
+            </section>
+            <section>
+                <h2>Marcas</h2>
+                <div class="chips" id="chipsMarcas"></div>
+            </section>
+            <section>
+                <h2>Vistas hace poco</h2>
+                <ul id="listaRecientes"></ul>
+            </section>
+        </aside>
+
+        <main id="lista" tabindex="-1">
+            <div class="resumen" id="resumen" aria-label="Filtrar por estado"></div>
+
+            <div class="list-head">
+                <h2 id="tituloLista">Todas las impresoras</h2>
+                <span class="contador" id="contador"></span>
+                <div class="activos" id="filtrosActivos"></div>
+                <div class="derecha">
+                    <button class="btn btn-sm" data-accion="nueva" data-rol="editor"><svg class="icon"><use href="#i-plus"/></svg><span class="ocultar-sm">Nueva</span></button>
+                    <div class="segmentado ocultar-sm" role="group" aria-label="Vista">
+                        <button data-accion="vista" data-valor="tabla" id="vistaTablaBtn" aria-pressed="true" title="Vista tabla"><svg class="icon"><use href="#i-list"/></svg></button>
+                        <button data-accion="vista" data-valor="cards" id="vistaCardsBtn" aria-pressed="false" title="Vista tarjetas"><svg class="icon"><use href="#i-grid"/></svg></button>
+                    </div>
+                </div>
+            </div>
+
+            <p class="imprimir-cabecera" id="imprimirCabecera"></p>
+
+            <div class="tabla-card" id="vistaTabla">
+                <table>
+                    <thead>
+                        <tr>
+                            <th class="c-sel"><input type="checkbox" id="selectAll" data-accion="sel-todas" aria-label="Seleccionar todas las del listado"></th>
+                            <th class="c-fav"><span class="sr-only">Favorita</span></th>
+                            <th class="c-estado"><button class="th-sort" data-accion="ordenar" data-valor="estado">Estado <span class="flecha">▲</span></button></th>
+                            <th class="c-id"><button class="th-sort" data-accion="ordenar" data-valor="id">ID <span class="flecha">▲</span></button></th>
+                            <th class="c-lugar"><button class="th-sort" data-accion="ordenar" data-valor="lugar">Lugar <span class="flecha">▲</span></button></th>
+                            <th class="c-equipo"><button class="th-sort" data-accion="ordenar" data-valor="equipo">Equipo <span class="flecha">▲</span></button></th>
+                            <th class="c-ip"><button class="th-sort" data-accion="ordenar" data-valor="ip">IP <span class="flecha">▲</span></button></th>
+                            <th class="c-serie"><button class="th-sort" data-accion="ordenar" data-valor="serie">N.º serie <span class="flecha">▲</span></button></th>
+                            <th class="c-info" title="Nota e incidencias">Notas</th>
+                            <th class="c-acc"><span class="sr-only">Acciones</span></th>
+                        </tr>
+                    </thead>
+                    <tbody id="tabla"></tbody>
+                </table>
+            </div>
+
+            <div class="cards" id="vistaCards" hidden></div>
+
+            <div class="paginacion" id="paginacion"></div>
+        </main>
+    </div>
+
+    <!-- FICHA DE IMPRESORA -->
+    <div class="fondo-ficha" id="fondoFicha" data-accion="cerrar-ficha"></div>
+    <aside class="ficha" id="ficha" role="dialog" aria-modal="false" aria-labelledby="fichaTitulo" aria-hidden="true"></aside>
+
+    <!-- BARRA DE SELECCIÓN -->
+    <div class="lote" id="accionesLote" role="region" aria-label="Acciones con las seleccionadas">
+        <strong id="contadorSeleccionados">0 seleccionadas</strong>
+        <button class="btn btn-sm" data-accion="lote-ping"><svg class="icon"><use href="#i-ping"/></svg>Ping</button>
+        <button class="btn btn-sm" data-accion="lote-copiar"><svg class="icon"><use href="#i-copy"/></svg>Copiar IPs</button>
+        <button class="btn btn-sm" data-accion="lote-exportar"><svg class="icon"><use href="#i-download"/></svg>CSV</button>
+        <button class="btn btn-sm" data-accion="lote-favoritas"><svg class="icon"><use href="#i-star"/></svg>Favoritas</button>
+        <button class="btn btn-sm" data-accion="lote-quitar" aria-label="Quitar selección"><svg class="icon"><use href="#i-x"/></svg></button>
+    </div>
+
+    <div class="toast-container" id="toastContainer" aria-live="polite"></div>
+
+    <!-- MODAL GENÉRICO -->
+    <div class="modal-overlay" id="modalOverlay">
+        <div class="modal" id="modalContenido" role="dialog" aria-modal="true" aria-labelledby="modalTitulo">
+            <div class="modal-titulo">
+                <h3 id="modalTitulo">Modal</h3>
+                <button class="btn btn-icon btn-ghost" data-accion="cerrar-modal" aria-label="Cerrar"><svg class="icon"><use href="#i-x"/></svg></button>
+            </div>
+            <div class="modal-body" id="modalBody"></div>
+            <div class="modal-actions" id="modalActions"></div>
+        </div>
+    </div>
+
+    <input type="file" id="inputImportar" accept=".csv,.json,.js,.txt" hidden>
+
+    <!-- Datos de las impresoras -->
+    <script src="impresoras_con_serial.js"></script>
+    <!-- Generador de QR (local, sin internet) -->
+    <script src="qrcode.min.js"></script>
+
+    <script>
+        "use strict";
+
+        // ============================================
+        // ALMACENAMIENTO (mismas claves que la versión anterior)
+        // ============================================
+        const STORAGE_KEYS = {
+            favoritos: "panel_impresoras_favoritos",
+            impresorasLocal: "panel_impresoras_local",
+            modo: "panel_impresoras_modo",
+            notas: "panel_impresoras_notas",
+            historial: "panel_impresoras_historial",
+            logs: "panel_impresoras_logs",
+            config: "panel_impresoras_config",
+            rol: "panel_impresoras_rol",
+            vista: "panel_impresoras_vista",
+            // nuevas
+            estados: "panel_impresoras_estados",
+            incidencias: "panel_impresoras_incidencias",
+            recientes: "panel_impresoras_recientes",
+            bajas: "panel_impresoras_bajas"
+        };
+
+        function leer(clave, porDefecto) {
+            try {
+                const v = localStorage.getItem(clave);
+                return v == null ? porDefecto : JSON.parse(v);
+            } catch { return porDefecto; }
+        }
+        function leerTexto(clave) {
+            try { return localStorage.getItem(clave); } catch { return null; }
+        }
+        let avisoAlmacenamiento = false;
+        function guardar(clave, valor) {
+            try {
+                localStorage.setItem(clave, typeof valor === "string" ? valor : JSON.stringify(valor));
+            } catch {
+                if (!avisoAlmacenamiento) {
+                    avisoAlmacenamiento = true;
+                    mostrarToast("El navegador no deja guardar datos (almacenamiento lleno o bloqueado).", "danger");
+                }
+            }
+        }
+
+        // ============================================
+        // CONFIGURACIÓN
+        // ============================================
+        const CONFIG_DEFECTO = {
+            version: 3,
+            apiBase: "",          // vacío = automático
+            paginacion: 0,        // 0 = todas en una página
+            historialMax: 50,
+            logsMax: 200,
+            iniciales: "",
+            concurrencia: 10,
+            vigilancia: { activa: false, minutos: 5, alcance: "todas" }
+        };
+
+        function cargarConfiguracion() {
+            const guardada = leer(STORAGE_KEYS.config, null) || {};
+            const cfg = { ...CONFIG_DEFECTO, ...guardada };
+            cfg.vigilancia = { ...CONFIG_DEFECTO.vigilancia, ...(guardada.vigilancia || {}) };
+            if (!guardada.version || guardada.version < 3) {
+                // Antes el servidor siempre era localhost:3000 y se paginaba de 25 en 25
+                if (cfg.apiBase === "http://localhost:3000") cfg.apiBase = "";
+                if (cfg.paginacion === 25) cfg.paginacion = 0;
+                cfg.version = 3;
+            }
+            return cfg;
+        }
+        let configuracion = cargarConfiguracion();
+        function guardarConfiguracion() { guardar(STORAGE_KEYS.config, configuracion); }
+
+        // Si el panel se abre desde el propio servidor (http://equipo:3000) se usa ese mismo servidor
+        function apiBase() {
+            const b = String(configuracion.apiBase || "").trim().replace(/\/+$/, "");
+            if (b) return b;
+            return /^https?:$/.test(location.protocol) ? location.origin : "http://localhost:3000";
+        }
+
+        // ============================================
+        // UTILIDADES
+        // ============================================
+        const $ = (sel) => document.querySelector(sel);
+
+        function escapeHTML(texto) {
+            if (texto == null) return "";
+            return String(texto).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+        }
+
+        // Sin tildes y en minúsculas: "Dirección" encuentra "DIRECCION" y al revés
+        function normalizar(texto) {
+            return String(texto ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+        }
+
+        function textoRelativo(t) {
+            if (!t) return "";
+            const s = Math.max(0, Math.round((Date.now() - t) / 1000));
+            if (s < 45) return "ahora";
+            const m = Math.round(s / 60);
+            if (m < 60) return `hace ${m} min`;
+            const h = Math.round(m / 60);
+            if (h < 24) return `hace ${h} h`;
+            return `hace ${Math.round(h / 24)} d`;
+        }
+        function fechaHora(t) {
+            return new Date(t).toLocaleString("es-ES", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
+        }
+        function icono(nombre) { return `<svg class="icon" aria-hidden="true"><use href="#i-${nombre}"/></svg>`; }
+        function plural(n, uno, varios) { return `${n} ${n === 1 ? uno : varios}`; }
+
+        function descargar(nombre, contenido, tipo) {
+            const blob = new Blob([contenido], { type: tipo });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = nombre;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+        }
+
+        // Copiar también funciona en http:// desde otro PC (sin contexto seguro)
+        async function copiarTexto(texto) {
+            try {
+                if (navigator.clipboard && window.isSecureContext) {
+                    await navigator.clipboard.writeText(texto);
+                    return true;
+                }
+            } catch {}
+            const ta = document.createElement("textarea");
+            ta.value = texto;
+            ta.setAttribute("readonly", "");
+            ta.style.cssText = "position:fixed;top:-1000px;opacity:0";
+            document.body.appendChild(ta);
+            ta.select();
+            let ok = false;
+            try { ok = document.execCommand("copy"); } catch {}
+            ta.remove();
+            return ok;
+        }
+        async function copiar(texto, etiqueta) {
+            if (!texto) { mostrarToast(`No hay ${etiqueta || "nada"} que copiar`, "warning"); return; }
+            const ok = await copiarTexto(texto);
+            mostrarToast(ok ? `${etiqueta ? etiqueta.charAt(0).toUpperCase() + etiqueta.slice(1) : "Texto"} copiado: ${texto.length > 60 ? texto.slice(0, 60) + "…" : texto}` : "No se pudo copiar", ok ? "success" : "danger");
+        }
+
+        // ============================================
+        // TOASTS
+        // ============================================
+        function mostrarToast(mensaje, tipo = "info", opciones = {}) {
+            const container = $("#toastContainer");
+            const toast = document.createElement("div");
+            toast.className = "toast toast-" + tipo;
+            toast.setAttribute("role", tipo === "danger" ? "alert" : "status");
+            toast.innerHTML = `<span>${escapeHTML(mensaje)}</span>`;
+            if (opciones.accion) {
+                const b = document.createElement("button");
+                b.className = "btn btn-sm";
+                b.textContent = opciones.accion.texto;
+                b.onclick = () => { opciones.accion.fn(); quitar(); };
+                toast.appendChild(b);
+            }
+            container.appendChild(toast);
+            while (container.children.length > 4) container.firstChild.remove();
+            let quitado = false;
+            function quitar() {
+                if (quitado) return;
+                quitado = true;
+                toast.classList.add("sale");
+                setTimeout(() => toast.remove(), 220);
+            }
+            setTimeout(quitar, opciones.duracion || (opciones.accion ? 7000 : 3200));
+        }
+
+        // ============================================
+        // MODALES
+        // ============================================
+        let focoAntesDelModal = null;
+        function mostrarModal({ titulo, contenido, acciones = [], grande = false, alAbrir }) {
+            const overlay = $("#modalOverlay");
+            if (!overlay.classList.contains("activo")) focoAntesDelModal = document.activeElement;
+            $("#modalTitulo").textContent = titulo;
+            $("#modalBody").innerHTML = contenido;
+            const cont = $("#modalActions");
+            cont.innerHTML = "";
+            acciones.forEach(accion => {
+                const btn = document.createElement("button");
+                btn.className = "btn " + (accion.clase || "btn-primary");
+                btn.textContent = accion.texto;
+                btn.onclick = () => {
+                    const r = accion.onClick ? accion.onClick() : undefined;
+                    if (accion.cerrar !== false && r !== false) cerrarModal();
+                };
+                cont.appendChild(btn);
+            });
+            $("#modalContenido").classList.toggle("modal-grande", grande);
+            overlay.classList.add("activo");
+            const primero = overlay.querySelector(".modal-body input, .modal-body select, .modal-body textarea") || cont.querySelector(".btn") || overlay.querySelector("[data-accion='cerrar-modal']");
+            if (primero) setTimeout(() => primero.focus(), 20);
+            if (alAbrir) alAbrir();
+        }
+        function cerrarModal() {
+            $("#modalOverlay").classList.remove("activo");
+            if (focoAntesDelModal && document.contains(focoAntesDelModal)) focoAntesDelModal.focus();
+        }
+        const modalAbierto = () => $("#modalOverlay").classList.contains("activo");
+        $("#modalOverlay").addEventListener("mousedown", (e) => { if (e.target.id === "modalOverlay") cerrarModal(); });
+
+        // ============================================
+        // REGISTRO DE ACTIVIDAD
+        // ============================================
+        function obtenerLogs() { return leer(STORAGE_KEYS.logs, []); }
+        function agregarLog(mensaje, tipo = "info") {
+            const logs = obtenerLogs();
+            logs.push({ fecha: new Date().toISOString(), mensaje, tipo });
+            if (logs.length > configuracion.logsMax) logs.splice(0, logs.length - configuracion.logsMax);
+            guardar(STORAGE_KEYS.logs, logs);
+        }
+        function abrirModalLogs() {
+            const logs = obtenerLogs().slice().reverse();
+            const contenido = logs.length === 0
+                ? `<p class="muted" style="text-align:center">No hay actividad registrada todavía.</p>`
+                : `<div class="logs-list">${logs.map(l => `
+                    <div class="log-item log-${escapeHTML(l.tipo)}">
+                        <div class="log-time">${escapeHTML(new Date(l.fecha).toLocaleString("es-ES"))}</div>
+                        <div>${escapeHTML(l.mensaje)}</div>
+                    </div>`).join("")}</div>`;
+            mostrarModal({
+                titulo: `Registro de actividad (${logs.length})`,
+                contenido,
+                grande: true,
+                acciones: [
+                    { texto: "Vaciar registro", clase: "btn-danger", onClick: () => { guardar(STORAGE_KEYS.logs, []); mostrarToast("Registro vaciado", "success"); } },
+                    { texto: "Cerrar", clase: "btn-light" }
+                ]
+            });
+        }
+
+        // ============================================
+        // DATOS DE IMPRESORAS
+        // ============================================
+        let impresorasFinales = [];
+        let porId = new Map();
+        let idsBase = new Set();
+        let favoritos = leer(STORAGE_KEYS.favoritos, []).map(String);
+        let notas = leer(STORAGE_KEYS.notas, {});
+        let incidencias = leer(STORAGE_KEYS.incidencias, {});
+        let recientes = leer(STORAGE_KEYS.recientes, []).map(String);
+        let bajas = leer(STORAGE_KEYS.bajas, []).map(String);
+
+        function obtenerLocales() { return leer(STORAGE_KEYS.impresorasLocal, []); }
+        function guardarLocales(lista) { guardar(STORAGE_KEYS.impresorasLocal, lista); }
+
+        function limpiarValor(v) {
+            if (v == null) return "";
+            return String(v).trim();
+        }
+        function normalizarImpresora(p) {
+            return {
+                ID: limpiarValor(p.ID),
+                EDIFICIO: limpiarValor(p.EDIFICIO),
+                UBICACION: limpiarValor(p.UBICACION),
+                MARCA: limpiarValor(p.MARCA),
+                MODELO: limpiarValor(p.MODELO),
+                "IP-PC": limpiarValor(p["IP-PC"]),
+                SERIAL: limpiarValor(p.SERIAL)
+            };
+        }
+
+        const hayDatosBase = typeof impresoras !== "undefined" && Array.isArray(impresoras);
+
+        function reconstruirDatos() {
+            const base = hayDatosBase ? impresoras.map(normalizarImpresora) : [];
+            idsBase = new Set(base.map(p => p.ID));
+            const mapa = new Map();
+            base.forEach(p => mapa.set(p.ID, p));
+            obtenerLocales().map(normalizarImpresora).forEach(p => {
+                if (!p.ID) return;
+                p._local = idsBase.has(p.ID) ? "editada" : "nueva";
+                mapa.set(p.ID, p);
+            });
+            const setBajas = new Set(bajas);
+            impresorasFinales = Array.from(mapa.values()).filter(p => !setBajas.has(p.ID));
+            porId = new Map(impresorasFinales.map(p => [p.ID, p]));
+            indexar();
+        }
+
+        // Dirección: IP, nombre de equipo (impresora compartida desde un PC) u otra cosa
+        const MARCADORES_SIN_IP = new Set(["", "-", "--", "DHCP", "USB", "N/A", "NA", "SIN IP", "LOCAL", "WIFI"]);
+        function esIPv4(s) { return /^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$/.test(s); }
+        function tipoDireccion(p) {
+            const v = p["IP-PC"];
+            if (esIPv4(v)) return "ip";
+            if (MARCADORES_SIN_IP.has(v.toUpperCase())) return v.toUpperCase() === "DHCP" ? "dhcp" : "vacia";
+            if (/^\d+\.\d+\.\d+\.\d+\s*-\s*\d+$/.test(v)) return "rango";
+            if (/^[A-Za-z][A-Za-z0-9-]{1,62}$/.test(v)) return "equipo";
+            return "otra";
+        }
+        function hostDe(p) {
+            const t = tipoDireccion(p);
+            return t === "ip" || t === "equipo" ? p["IP-PC"] : "";
+        }
+        function urlWeb(p, seguro) {
+            const h = hostDe(p);
+            return h && tipoDireccion(p) === "ip" ? `${seguro ? "https" : "http"}://${h}` : "";
+        }
+
+        // Texto de búsqueda precalculado por impresora
+        function indexar() {
+            impresorasFinales.forEach(p => {
+                const nota = notas[p.ID] || "";
+                const inc = (incidencias[p.ID] || []).map(i => i.texto).join(" ");
+                p._n = {
+                    ID: normalizar(p.ID),
+                    EDIFICIO: normalizar(p.EDIFICIO),
+                    UBICACION: normalizar(p.UBICACION),
+                    MARCA: normalizar(p.MARCA),
+                    MODELO: normalizar(p.MODELO),
+                    IP: normalizar(p["IP-PC"]),
+                    SERIAL: normalizar(p.SERIAL),
+                    NOTA: normalizar(nota + " " + inc)
+                };
+                p._n.TODO = [p._n.ID, p._n.EDIFICIO, p._n.UBICACION, p._n.MARCA, p._n.MODELO, p._n.IP, p._n.SERIAL, p._n.NOTA].join(" \u0001 ");
+            });
+        }
+
+        // ============================================
+        // ESTADOS DE PING (se recuerdan entre sesiones)
+        // ============================================
+        let estados = leer(STORAGE_KEYS.estados, {});      // host -> { estado, detalle, ms, t }
+        let historial = leer(STORAGE_KEYS.historial, {});  // host -> [{ fecha, estado }]
+        const comprobando = new Set();
+
+        let temporizadorGuardado = null;
+        function guardarEstadosLuego() {
+            clearTimeout(temporizadorGuardado);
+            temporizadorGuardado = setTimeout(() => {
+                guardar(STORAGE_KEYS.estados, estados);
+                guardar(STORAGE_KEYS.historial, historial);
+            }, 700);
+        }
+
+        const ESTADO_INFO = {
+            online: { texto: "Online", orden: 3 },
+            web: { texto: "Solo web", orden: 2 },
+            offline: { texto: "Offline", orden: 0 },
+            desconocido: { texto: "Sin comprobar", orden: 1 },
+            sinip: { texto: "Sin IP", orden: 4 },
+            comprobando: { texto: "Comprobando…", orden: 1 }
+        };
+
+        // Estado "de filtro" (no cambia mientras se está comprobando)
+        function claveEstado(p) {
+            const h = hostDe(p);
+            if (!h) return "sinip";
+            const e = estados[h];
+            return e ? e.estado : "desconocido";
+        }
+        function estadoVisible(p) {
+            const h = hostDe(p);
+            if (h && comprobando.has(h)) return "comprobando";
+            return claveEstado(p);
+        }
+
+        function htmlEstado(p, conDetalle = true) {
+            const clave = estadoVisible(p);
+            const e = estados[hostDe(p)];
+            let sub = "";
+            if (conDetalle) {
+                if (clave === "sinip") {
+                    const t = tipoDireccion(p);
+                    sub = t === "dhcp" ? "DHCP" : t === "rango" ? "Rango de IPs" : t === "otra" ? "Dirección no válida" : "";
+                } else if (e && clave !== "comprobando") {
+                    const viejo = Date.now() - e.t > 30 * 60 * 1000;
+                    sub = `${e.estado === "online" && e.ms != null ? e.ms + " ms · " : ""}<span data-t="${e.t}">${textoRelativo(e.t)}</span>`;
+                    sub = `<span class="st-sub${viejo ? " viejo" : ""}" title="Comprobado el ${escapeHTML(fechaHora(e.t))}">${sub}</span>`;
+                    return `<span class="st st-${clave}"><i></i>${ESTADO_INFO[clave].texto}</span>${sub}`;
+                } else if (tipoDireccion(p) === "equipo" && clave !== "comprobando") {
+                    sub = "Por nombre de equipo";
+                }
+                if (sub) sub = `<span class="st-sub">${sub}</span>`;
+            }
+            return `<span class="st st-${clave}"><i></i>${ESTADO_INFO[clave].texto}</span>${sub}`;
+        }
+
+        // Histórico
+        function guardarHistoricoPing(host, estado) {
+            if (!host) return;
+            if (!historial[host]) historial[host] = [];
+            historial[host].push({ fecha: Date.now(), estado });
+            if (historial[host].length > configuracion.historialMax) {
+                historial[host] = historial[host].slice(-configuracion.historialMax);
+            }
+        }
+        function calcularUptime(host) {
+            const pings = historial[host] || [];
+            if (!pings.length) return null;
+            return Math.round(pings.filter(p => p.estado === "online" || p.estado === "web").length / pings.length * 100);
+        }
+
+        // ============================================
+        // SERVIDOR DE PING
+        // ============================================
+        const servidor = { ok: null, version: null };
+        let reintentoServidor = null;
+
+        function marcarServidor(ok, version) {
+            servidor.ok = ok;
+            if (version !== undefined) servidor.version = version;
+            const el = $("#srvEstado");
+            el.classList.toggle("ok", ok === true);
+            el.classList.toggle("ko", ok === false);
+            $("#srvTexto").textContent = ok === null ? "Servidor…" : ok ? "Servidor OK" : "Sin servidor";
+            el.title = ok ? `Servidor de ping conectado: ${apiBase()}${servidor.version ? " (v" + servidor.version + ")" : ""}` : `No hay conexión con ${apiBase()}. Pulsa para reintentar.`;
+            $("#bannerUrl").textContent = apiBase();
+            $("#bannerError").classList.toggle("activo", ok === false);
+            clearTimeout(reintentoServidor);
+            if (ok === false) reintentoServidor = setTimeout(() => comprobarServidor(), 30000);
+        }
+
+        async function comprobarServidor(avisar) {
+            const ctrl = new AbortController();
+            const t = setTimeout(() => ctrl.abort(), 3000);
+            try {
+                const r = await fetch(apiBase() + "/estado", { signal: ctrl.signal, cache: "no-store" });
+                let version = "anterior";
+                if (r.ok) { try { version = (await r.json()).version || version; } catch {} }
+                marcarServidor(true, version);
+                if (avisar) mostrarToast("Servidor de ping conectado", "success");
+            } catch {
+                marcarServidor(false);
+                if (avisar) mostrarToast("El servidor de ping sigue sin responder", "danger");
+            } finally {
+                clearTimeout(t);
+            }
+        }
+
+        // ============================================
+        // COMPROBAR ESTADOS
+        // ============================================
+        let tareaPing = null;
+        const estaArriba = (s) => s === "online" || s === "web";
+
+        async function pingHost(host, signal) {
+            comprobando.add(host);
+            programarRender();
+            try {
+                const r = await fetch(apiBase() + "/ping?ip=" + encodeURIComponent(host), { signal, cache: "no-store" });
+                const datos = await r.json();
+                if (servidor.ok !== true) marcarServidor(true);
+                const previo = estados[host];
+                const nuevo = {
+                    estado: estaArriba(datos.estado) ? datos.estado : "offline",
+                    detalle: datos.detalle || datos.error || "",
+                    ms: typeof datos.ms === "number" ? datos.ms : null,
+                    t: Date.now()
+                };
+                estados[host] = nuevo;
+                guardarHistoricoPing(host, nuevo.estado);
+                guardarEstadosLuego();
+                let cambio = null;
+                if (previo && estaArriba(previo.estado) && nuevo.estado === "offline") cambio = "caida";
+                if (previo && previo.estado === "offline" && estaArriba(nuevo.estado)) cambio = "vuelve";
+                return { host, nuevo, cambio };
+            } catch (err) {
+                if (err.name !== "AbortError") {
+                    marcarServidor(false);
+                    return { host, errorServidor: true };
+                }
+                return null;
+            } finally {
+                comprobando.delete(host);
+                programarRender();
+            }
+        }
+
+        async function comprobarImpresoras(lista, { motivo = "manual" } = {}) {
+            const hosts = [...new Set(lista.map(hostDe).filter(Boolean))];
+            if (!hosts.length) {
+                if (motivo !== "vigilancia") mostrarToast("No hay impresoras con IP en el listado", "warning");
+                return;
+            }
+            if (tareaPing) {
+                if (motivo !== "vigilancia") mostrarToast("Ya hay una comprobación en marcha", "warning");
+                return;
+            }
+            const ctrl = new AbortController();
+            const tarea = tareaPing = { total: hosts.length, hechas: 0, ctrl, cambios: [], caidas: 0, motivo };
+            document.body.classList.add("con-progreso");
+            $("#progreso").classList.add("activo");
+            actualizarProgreso();
+
+            let i = 0;
+            const trabajador = async () => {
+                while (i < hosts.length && !ctrl.signal.aborted) {
+                    const r = await pingHost(hosts[i++], ctrl.signal);
+                    if (!r) continue;
+                    if (r.errorServidor) { ctrl.abort(); break; }
+                    tarea.hechas++;
+                    if (r.nuevo.estado === "offline") tarea.caidas++;
+                    if (r.cambio) tarea.cambios.push(r);
+                    actualizarProgreso();
+                }
+            };
+            const n = Math.max(1, Math.min(Number(configuracion.concurrencia) || 10, hosts.length));
+            await Promise.all(Array.from({ length: n }, trabajador));
+
+            tareaPing = null;
+            document.body.classList.remove("con-progreso");
+            $("#progreso").classList.remove("activo");
+            guardar(STORAGE_KEYS.estados, estados);
+            guardar(STORAGE_KEYS.historial, historial);
+            programarRender();
+
+            const caidas = tarea.cambios.filter(c => c.cambio === "caida");
+            const vuelven = tarea.cambios.filter(c => c.cambio === "vuelve");
+            const nombre = (c) => {
+                const p = impresorasFinales.find(x => hostDe(x) === c.host);
+                return p ? `${p.UBICACION || p.EDIFICIO} (${c.host})` : c.host;
+            };
+            caidas.forEach(c => agregarLog(`Deja de responder: ${nombre(c)}`, "danger"));
+            vuelven.forEach(c => agregarLog(`Vuelve a responder: ${nombre(c)}`, "success"));
+
+            if (servidor.ok === false) {
+                mostrarToast("Comprobación detenida: no hay conexión con el servidor de ping", "danger");
+                return;
+            }
+            if (ctrl.signal.aborted) {
+                mostrarToast(`Comprobación cancelada (${tarea.hechas} de ${tarea.total})`, "warning");
+                return;
+            }
+            if (motivo === "vigilancia") {
+                if (caidas.length) notificarCambios(caidas, vuelven);
+                else if (vuelven.length) mostrarToast(`Vuelven a responder: ${vuelven.map(nombre).join(", ")}`, "success");
+                return;
+            }
+            const arriba = tarea.hechas - tarea.caidas;
+            let msg = `Comprobadas ${tarea.hechas}: ${arriba} responden · ${tarea.caidas} offline`;
+            if (caidas.length) msg += ` · nuevas caídas: ${caidas.map(nombre).join(", ")}`;
+            mostrarToast(msg, tarea.caidas ? "warning" : "success", { duracion: 6000 });
+            agregarLog(`Comprobación de ${tarea.hechas}: ${arriba} responden, ${tarea.caidas} offline`, tarea.caidas ? "warning" : "success");
+        }
+
+        function actualizarProgreso() {
+            if (!tareaPing) return;
+            const { hechas, total, caidas } = tareaPing;
+            $("#progresoTexto").textContent = `Comprobando ${hechas} de ${total}${caidas ? ` · ${caidas} offline` : ""}`;
+            $("#progresoBarra").style.width = (total ? hechas / total * 100 : 0) + "%";
+        }
+
+        async function comprobarUna(id) {
+            const p = porId.get(String(id));
+            if (!p) return;
+            const host = hostDe(p);
+            if (!host) { mostrarToast("Esta impresora no tiene una IP que se pueda comprobar", "warning"); return; }
+            const r = await pingHost(host);
+            guardar(STORAGE_KEYS.estados, estados);
+            guardar(STORAGE_KEYS.historial, historial);
+            if (!r) return;
+            if (r.errorServidor) { mostrarToast("No hay conexión con el servidor de ping", "danger"); return; }
+            const info = ESTADO_INFO[r.nuevo.estado].texto;
+            mostrarToast(`${p.UBICACION || p.EDIFICIO} · ${host} → ${info}${r.nuevo.ms != null ? ` (${r.nuevo.ms} ms)` : ""}`, estaArriba(r.nuevo.estado) ? "success" : "danger");
+            if (r.cambio) agregarLog(`${r.cambio === "caida" ? "Deja de responder" : "Vuelve a responder"}: ${p.UBICACION} (${host})`, r.cambio === "caida" ? "danger" : "success");
+        }
+
+        // ============================================
+        // VIGILANCIA AUTOMÁTICA
+        // ============================================
+        let temporizadorVigilancia = null;
+        let proximaRonda = 0;
+
+        function listaVigilada() {
+            const lista = configuracion.vigilancia.alcance === "favoritas"
+                ? impresorasFinales.filter(p => favoritos.includes(p.ID))
+                : impresorasFinales;
+            return lista.filter(p => hostDe(p));
+        }
+        function programarVigilancia(inmediata) {
+            clearTimeout(temporizadorVigilancia);
+            const activa = configuracion.vigilancia.activa;
+            $("#btnVigilar").setAttribute("aria-pressed", String(activa));
+            if (!activa) { proximaRonda = 0; $("#tiempoVig").textContent = ""; return; }
+            const espera = inmediata ? 400 : Math.max(1, Number(configuracion.vigilancia.minutos) || 5) * 60000;
+            proximaRonda = Date.now() + espera;
+            temporizadorVigilancia = setTimeout(async () => {
+                if (servidor.ok !== false) await comprobarImpresoras(listaVigilada(), { motivo: "vigilancia" });
+                programarVigilancia(false);
+            }, espera);
+            pintarCuentaAtras();
+        }
+        function pintarCuentaAtras() {
+            if (!configuracion.vigilancia.activa || !proximaRonda) return;
+            const s = Math.max(0, Math.round((proximaRonda - Date.now()) / 1000));
+            $("#tiempoVig").textContent = tareaPing && tareaPing.motivo === "vigilancia" ? "…" : `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+        }
+        async function toggleVigilancia() {
+            configuracion.vigilancia.activa = !configuracion.vigilancia.activa;
+            guardarConfiguracion();
+            if (configuracion.vigilancia.activa) {
+                if ("Notification" in window && Notification.permission === "default") {
+                    try { await Notification.requestPermission(); } catch {}
+                }
+                const alcance = configuracion.vigilancia.alcance === "favoritas" ? "las favoritas" : "todas las impresoras";
+                mostrarToast(`Vigilancia activada: se comprueban ${alcance} cada ${configuracion.vigilancia.minutos} min y te aviso si alguna deja de responder`, "success", { duracion: 6000 });
+                agregarLog("Vigilancia activada", "info");
+            } else {
+                mostrarToast("Vigilancia desactivada", "info");
+                agregarLog("Vigilancia desactivada", "info");
+            }
+            programarVigilancia(configuracion.vigilancia.activa);
+        }
+        function notificarCambios(caidas, vuelven) {
+            const lineas = caidas.map(c => {
+                const p = impresorasFinales.find(x => hostDe(x) === c.host);
+                return p ? `${p.EDIFICIO} › ${p.UBICACION} · ${p.MARCA} ${p.MODELO} (${c.host})` : c.host;
+            });
+            const titulo = caidas.length === 1 ? "Una impresora ha dejado de responder" : `${caidas.length} impresoras han dejado de responder`;
+            mostrarToast(`${titulo}: ${lineas.join(" · ")}`, "danger", { duracion: 12000, accion: { texto: "Ver", fn: () => setFiltro("estado", "offline", true) } });
+            if ("Notification" in window && Notification.permission === "granted") {
+                try {
+                    const n = new Notification(titulo, { body: lineas.join("\n"), tag: "impresoras-caidas", icon: "icon.svg" });
+                    n.onclick = () => {
+                        window.focus();
+                        const p = impresorasFinales.find(x => hostDe(x) === caidas[0].host);
+                        if (p) abrirFicha(p.ID);
+                        n.close();
+                    };
+                } catch {}
+            }
+        }
+
+        // ============================================
+        // FAVORITOS, NOTAS, INCIDENCIAS, RECIENTES
+        // ============================================
+        function toggleFavorito(id) {
+            id = String(id);
+            const i = favoritos.indexOf(id);
+            if (i >= 0) favoritos.splice(i, 1); else favoritos.push(id);
+            guardar(STORAGE_KEYS.favoritos, favoritos);
+            agregarLog(`Impresora #${id} ${i >= 0 ? "quitada de" : "añadida a"} favoritas`, "info");
+            programarRender();
+        }
+
+        function guardarNota(id, texto) {
+            texto = texto.trim();
+            if (texto) notas[id] = texto; else delete notas[id];
+            guardar(STORAGE_KEYS.notas, notas);
+            agregarLog(`Nota ${texto ? "actualizada" : "eliminada"} en impresora #${id}`, "info");
+            indexar();
+            programarRender();
+            mostrarToast("Nota guardada", "success");
+        }
+
+        function agregarIncidencia(id, texto) {
+            texto = texto.trim();
+            if (!texto) return false;
+            if (!incidencias[id]) incidencias[id] = [];
+            incidencias[id].unshift({ id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), t: Date.now(), texto, autor: configuracion.iniciales || "" });
+            guardar(STORAGE_KEYS.incidencias, incidencias);
+            agregarLog(`Incidencia anotada en impresora #${id}`, "info");
+            indexar();
+            programarRender();
+            return true;
+        }
+        function borrarIncidencia(id, idInc) {
+            const lista = incidencias[id] || [];
+            const i = lista.findIndex(x => x.id === idInc);
+            if (i < 0) return;
+            const [quitada] = lista.splice(i, 1);
+            if (!lista.length) delete incidencias[id];
+            guardar(STORAGE_KEYS.incidencias, incidencias);
+            indexar();
+            renderFicha();
+            programarRender();
+            mostrarToast("Incidencia borrada", "info", {
+                accion: { texto: "Deshacer", fn: () => {
+                    (incidencias[id] = incidencias[id] || []).splice(i, 0, quitada);
+                    guardar(STORAGE_KEYS.incidencias, incidencias);
+                    indexar(); renderFicha(); programarRender();
+                } }
+            });
+        }
+
+        function marcarReciente(id) {
+            recientes = [String(id), ...recientes.filter(x => x !== String(id))].slice(0, 8);
+            guardar(STORAGE_KEYS.recientes, recientes);
+        }
+
+        // ============================================
+        // BÚSQUEDA Y FILTROS
+        // ============================================
+        const filtros = { texto: "", estado: "", edificio: "", marca: "", favoritas: false };
+        let orden = { campo: "", dir: 1 };
+        let ultimoResultado = [];
+        let conteos = {};
+        let tokensBusqueda = [];
+        let paginaActual = 1;
+
+        const CAMPOS_BUSQUEDA = {
+            ip: "IP", id: "ID", serie: "SERIAL", sn: "SERIAL", serial: "SERIAL", marca: "MARCA", modelo: "MODELO",
+            edificio: "EDIFICIO", edif: "EDIFICIO", ubicacion: "UBICACION", ubi: "UBICACION", lugar: "UBICACION", nota: "NOTA"
+        };
+
+        // "hp polanco", "ip:10.35.236", "serie:CNB3", "\"sala 2\""
+        function parsearBusqueda(texto) {
+            const tokens = [];
+            const re = /([a-zñáéíóú]+):(?:"([^"]*)"|(\S+))|"([^"]*)"|(\S+)/gi;
+            let m;
+            while ((m = re.exec(texto))) {
+                const campo = m[1] ? CAMPOS_BUSQUEDA[normalizar(m[1])] : null;
+                if (m[1] && campo) {
+                    const v = normalizar(m[2] ?? m[3] ?? "");
+                    if (v) tokens.push({ campo, v });
+                } else {
+                    const v = normalizar(m[4] ?? m[5] ?? m[0]);
+                    if (v) tokens.push({ campo: null, v });
+                }
+            }
+            return tokens;
+        }
+        function coincide(p, tokens) {
+            for (const t of tokens) {
+                const heno = t.campo ? p._n[t.campo] : p._n.TODO;
+                if (t.campo === "ID" ? !heno.startsWith(t.v) : !heno.includes(t.v)) return false;
+            }
+            return true;
+        }
+        function puntuar(p, tokens) {
+            let s = 0;
+            for (const t of tokens) {
+                const v = t.v;
+                if (p._n.ID === v) s += 100;
+                if (p._n.IP === v) s += 90;
+                if (p._n.SERIAL === v) s += 90;
+                if (p._n.UBICACION === v) s += 50;
+                else if (p._n.UBICACION.startsWith(v)) s += 30;
+                else if (p._n.UBICACION.includes(v)) s += 14;
+                if (p._n.EDIFICIO.startsWith(v)) s += 10;
+                if (p._n.MODELO.includes(v) || p._n.MARCA.startsWith(v)) s += 6;
+            }
+            if (favoritos.includes(p.ID)) s += 3;
+            return s;
+        }
+
+        const porDefecto = (a, b) =>
+            a.EDIFICIO.localeCompare(b.EDIFICIO, "es") ||
+            a.UBICACION.localeCompare(b.UBICACION, "es") ||
+            (Number(a.ID) - Number(b.ID)) || a.ID.localeCompare(b.ID);
+        const claveIP = (p) => {
+            const h = p["IP-PC"];
+            return esIPv4(h) ? h.split(".").map(n => n.padStart(3, "0")).join(".") : "~" + h;
+        };
+        const ORDENADORES = {
+            estado: (a, b) => ESTADO_INFO[claveEstado(a)].orden - ESTADO_INFO[claveEstado(b)].orden,
+            id: (a, b) => (Number(a.ID) - Number(b.ID)) || a.ID.localeCompare(b.ID),
+            lugar: (a, b) => a.EDIFICIO.localeCompare(b.EDIFICIO, "es") || a.UBICACION.localeCompare(b.UBICACION, "es"),
+            equipo: (a, b) => a.MARCA.localeCompare(b.MARCA, "es") || a.MODELO.localeCompare(b.MODELO, "es"),
+            ip: (a, b) => claveIP(a).localeCompare(claveIP(b)),
+            serie: (a, b) => (a.SERIAL ? 0 : 1) - (b.SERIAL ? 0 : 1) || a.SERIAL.localeCompare(b.SERIAL)
+        };
+
+        function calcularResultado() {
+            tokensBusqueda = parsearBusqueda(filtros.texto);
+            const favs = new Set(favoritos);
+            const base = impresorasFinales.filter(p =>
+                (!filtros.edificio || p.EDIFICIO === filtros.edificio) &&
+                (!filtros.marca || p.MARCA === filtros.marca) &&
+                (!filtros.favoritas || favs.has(p.ID)) &&
+                coincide(p, tokensBusqueda));
+
+            conteos = { todas: base.length, online: 0, web: 0, offline: 0, desconocido: 0, sinip: 0 };
+            base.forEach(p => conteos[claveEstado(p)]++);
+
+            let res = filtros.estado ? base.filter(p => claveEstado(p) === filtros.estado) : base;
+            if (orden.campo) {
+                const f = ORDENADORES[orden.campo];
+                res = res.slice().sort((a, b) => f(a, b) * orden.dir || porDefecto(a, b));
+            } else if (tokensBusqueda.length) {
+                const puntos = new Map(res.map(p => [p, puntuar(p, tokensBusqueda)]));
+                res = res.slice().sort((a, b) => puntos.get(b) - puntos.get(a) || porDefecto(a, b));
+            } else {
+                res = res.slice().sort(porDefecto);
+            }
+            ultimoResultado = res;
+            const totalPaginas = paginas();
+            if (paginaActual > totalPaginas) paginaActual = Math.max(1, totalPaginas);
+        }
+
+        function hayFiltros() {
+            return !!(filtros.texto || filtros.estado || filtros.edificio || filtros.marca || filtros.favoritas);
+        }
+        function setFiltro(nombre, valor, forzar) {
+            filtros[nombre] = !forzar && filtros[nombre] === valor ? "" : valor;
+            paginaActual = 1;
+            actualizar();
+        }
+        function reiniciarFiltros(silencioso) {
+            filtros.texto = ""; filtros.estado = ""; filtros.edificio = ""; filtros.marca = ""; filtros.favoritas = false;
+            $("#buscar").value = "";
+            $("#cajaBusqueda").classList.remove("con-texto");
+            paginaActual = 1;
+            actualizar();
+            if (!silencioso) mostrarToast("Filtros quitados", "info");
+        }
+        function ordenarPor(campo) {
+            if (orden.campo !== campo) orden = { campo, dir: 1 };
+            else if (orden.dir === 1) orden.dir = -1;
+            else orden = { campo: "", dir: 1 };
+            actualizar();
+        }
+
+        // Resaltar lo buscado sin tener en cuenta tildes
+        function resaltar(texto) {
+            texto = String(texto ?? "");
+            const valores = tokensBusqueda.map(t => t.v).filter(v => v.length >= 1);
+            if (!valores.length || !texto) return escapeHTML(texto);
+            const plano = Array.from(texto).map(c => normalizar(c).charAt(0) || c).join("");
+            const marcas = new Array(texto.length).fill(false);
+            valores.forEach(v => {
+                let i = plano.indexOf(v);
+                while (i !== -1) { for (let k = i; k < i + v.length; k++) marcas[k] = true; i = plano.indexOf(v, i + v.length); }
+            });
+            let html = "", dentro = false;
+            Array.from(texto).forEach((c, i) => {
+                if (marcas[i] && !dentro) { html += "<mark>"; dentro = true; }
+                if (!marcas[i] && dentro) { html += "</mark>"; dentro = false; }
+                html += escapeHTML(c);
+            });
+            return html + (dentro ? "</mark>" : "");
+        }
+
+        // ============================================
+        // PINTAR
+        // ============================================
+        let vistaActual = leerTexto(STORAGE_KEYS.vista) === "cards" ? "cards" : "tabla";
+        let seleccionadas = new Set();
+        let filaActiva = null;
+        let renderPendiente = false;
+        const movil = window.matchMedia("(max-width: 760px)");
+        let imprimiendo = false;
+
+        function programarRender() {
+            if (renderPendiente) return;
+            renderPendiente = true;
+            requestAnimationFrame(() => { renderPendiente = false; actualizar(); });
+        }
+
+        function actualizar() {
+            calcularResultado();
+            renderResumen();
+            renderLateral();
+            renderLista();
+            renderCabeceraLista();
+            actualizarBarraSeleccion();
+            actualizarTitulo();
+            refrescarEstadoFicha();
+            const n = ultimoResultado.length;
+            $("#txtComprobar").textContent = hayFiltros() && n !== impresorasFinales.length
+                ? `Comprobar ${n}`
+                : "Comprobar todas";
+        }
+
+        function paginas() {
+            const tam = Number(configuracion.paginacion) || 0;
+            return tam > 0 ? Math.max(1, Math.ceil(ultimoResultado.length / tam)) : 1;
+        }
+        function listaVisible() {
+            const tam = Number(configuracion.paginacion) || 0;
+            if (!tam || imprimiendo) return ultimoResultado;
+            const ini = (paginaActual - 1) * tam;
+            return ultimoResultado.slice(ini, ini + tam);
+        }
+
+        function renderResumen() {
+            const botones = [
+                ["", "Todas", conteos.todas, ""],
+                ["online", "Online", conteos.online, "dot-online"],
+                ["web", "Solo web", conteos.web, "dot-web"],
+                ["offline", "Offline", conteos.offline, "dot-offline"],
+                ["desconocido", "Sin comprobar", conteos.desconocido, "dot-desconocido"],
+                ["sinip", "Sin IP", conteos.sinip, "dot-sinip"]
+            ];
+            let html = botones.map(([valor, texto, n, dot]) => {
+                if (valor && !n && filtros.estado !== valor && valor !== "offline") return "";
+                return `<button class="chip" data-accion="estado" data-valor="${valor}" aria-pressed="${filtros.estado === valor}">${dot ? `<span class="dot ${dot}"></span>` : ""}${texto} <span class="n">${n}</span></button>`;
+            }).join("");
+            html += `<button class="chip" data-accion="favoritas" aria-pressed="${filtros.favoritas}">${icono("star")}Favoritas <span class="n">${favoritos.filter(id => porId.has(id)).length}</span></button>`;
+
+            const tiempos = Object.values(estados).map(e => e.t).filter(Boolean);
+            const ultima = tiempos.length ? Math.max(...tiempos) : 0;
+            html += `<span class="ultima">`;
+            if (conteos.offline) html += `<button class="btn btn-sm" data-accion="reintentar-offline">${icono("ping")}Reintentar offline (${conteos.offline})</button>`;
+            html += ultima ? `<span title="${escapeHTML(fechaHora(ultima))}">${icono("clock")} Última comprobación: <span data-t="${ultima}">${textoRelativo(ultima)}</span></span>` : `<span>${icono("clock")} Aún no se ha comprobado nada</span>`;
+            html += `</span>`;
+            $("#resumen").innerHTML = html;
+        }
+
+        function renderLateral() {
+            // Edificios
+            const edificios = new Map();
+            impresorasFinales.forEach(p => {
+                const e = p.EDIFICIO || "Sin edificio";
+                if (!edificios.has(e)) edificios.set(e, { total: 0, caidas: 0 });
+                const d = edificios.get(e);
+                d.total++;
+                if (claveEstado(p) === "offline") d.caidas++;
+            });
+            $("#listaEdificios").innerHTML = [...edificios.entries()]
+                .sort((a, b) => a[0].localeCompare(b[0], "es"))
+                .map(([e, d]) => `<li><button class="side-item" data-accion="edificio" data-valor="${escapeHTML(e)}" aria-pressed="${filtros.edificio === e}" title="${escapeHTML(e)}">
+                    <span>${escapeHTML(e)}</span>${d.caidas ? `<span class="caidas" title="${plural(d.caidas, "offline", "offline")}">${d.caidas}</span>` : ""}<span class="n">${d.total}</span></button></li>`)
+                .join("") || `<li class="side-vacio">Sin datos</li>`;
+
+            // Marcas
+            const marcas = new Map();
+            impresorasFinales.forEach(p => { const m = p.MARCA || "Sin marca"; marcas.set(m, (marcas.get(m) || 0) + 1); });
+            $("#chipsMarcas").innerHTML = [...marcas.entries()].sort((a, b) => b[1] - a[1])
+                .map(([m, n]) => `<button class="chip" data-accion="marca" data-valor="${escapeHTML(m)}" aria-pressed="${filtros.marca === m}">${escapeHTML(m)} <span class="n">${n}</span></button>`)
+                .join("");
+
+            // Recientes
+            const rec = recientes.map(id => porId.get(id)).filter(Boolean);
+            $("#listaRecientes").innerHTML = rec.length
+                ? rec.map(p => `<li><button class="side-item side-reciente" data-accion="abrir-id" data-id="${escapeHTML(p.ID)}"><span>${escapeHTML(p.UBICACION || p.EDIFICIO)}<small>${escapeHTML(p.EDIFICIO)} · ${escapeHTML(p.MARCA)}</small></span><span class="st st-${claveEstado(p)}"><i></i></span></button></li>`).join("")
+                : `<li class="side-vacio">Las impresoras que abras aparecerán aquí.</li>`;
+        }
+
+        function renderCabeceraLista() {
+            let titulo = "Todas las impresoras";
+            if (filtros.estado) titulo = { online: "Online", web: "Solo responden por web", offline: "Offline", desconocido: "Sin comprobar", sinip: "Sin IP" }[filtros.estado];
+            if (filtros.favoritas) titulo = filtros.estado ? titulo + " · favoritas" : "Favoritas";
+            $("#tituloLista").textContent = titulo;
+            $("#contador").textContent = `${ultimoResultado.length} de ${impresorasFinales.length}`;
+
+            const activos = [];
+            if (filtros.texto) activos.push(["texto", `“${filtros.texto}”`]);
+            if (filtros.edificio) activos.push(["edificio", filtros.edificio]);
+            if (filtros.marca) activos.push(["marca", filtros.marca]);
+            let html = activos.map(([f, t]) => `<button class="activo-pill" data-accion="quitar-filtro" data-valor="${f}" title="Quitar filtro">${escapeHTML(t)}${icono("x")}</button>`).join("");
+            if (hayFiltros()) html += `<button class="activo-pill" data-accion="limpiar-filtros" style="background:none">Quitar todos</button>`;
+            $("#filtrosActivos").innerHTML = html;
+
+            document.querySelectorAll(".th-sort").forEach(b => {
+                if (b.dataset.valor === orden.campo) {
+                    b.dataset.dir = orden.dir;
+                    b.querySelector(".flecha").textContent = orden.dir === 1 ? "▲" : "▼";
+                } else {
+                    delete b.dataset.dir;
+                }
+            });
+            $("#imprimirCabecera").textContent = `Impresoras · ${titulo} · ${ultimoResultado.length} · ${fechaHora(Date.now())}`;
+        }
+
+        function htmlDireccion(p) {
+            const t = tipoDireccion(p);
+            const v = p["IP-PC"];
+            if (t === "ip" || t === "equipo") {
+                return `<button class="ip-btn" data-accion="copiar-ip" title="Copiar (C)">${resaltar(v)}${icono("copy")}</button>`;
+            }
+            if (!v || v === "-") return `<span class="muted">—</span>`;
+            return `<span class="ip-rara" title="No es una IP que se pueda comprobar">${resaltar(v)}</span>`;
+        }
+        function htmlInfo(p) {
+            const nota = notas[p.ID];
+            const inc = (incidencias[p.ID] || []).length;
+            let h = "";
+            if (nota) h += `<span title="${escapeHTML(nota)}">${icono("note")}</span> `;
+            if (inc) h += `<span title="${plural(inc, "incidencia", "incidencias")} · última: ${escapeHTML(incidencias[p.ID][0].texto.slice(0, 80))}">${icono("clip")}${inc}</span>`;
+            return h || `<span aria-hidden="true">·</span>`;
+        }
+        function htmlAcciones(p) {
+            const web = urlWeb(p);
+            return `<span class="acc">
+                ${web ? `<a class="btn" href="${web}" target="_blank" rel="noopener" data-accion="web" title="Abrir la web de la impresora (W)">${icono("globe")}Web</a>` : ""}
+                ${hostDe(p) ? `<button class="btn" data-accion="ping" title="Comprobar ahora (P)">${icono("ping")}Ping</button>` : ""}
+            </span>`;
+        }
+
+        function renderLista() {
+            const lista = listaVisible();
+            const cards = vistaActual === "cards" || movil.matches;
+            $("#vistaTabla").hidden = cards;
+            $("#vistaCards").hidden = !cards;
+            $("#vistaTablaBtn").setAttribute("aria-pressed", String(vistaActual === "tabla"));
+            $("#vistaCardsBtn").setAttribute("aria-pressed", String(vistaActual === "cards"));
+
+            const vacio = !hayDatosBase && !impresorasFinales.length
+                ? `<div class="sin-resultados"><b>No se ha cargado el fichero de impresoras</b>Comprueba que <code>impresoras_con_serial.js</code> está en la misma carpeta que esta página.</div>`
+                : `<div class="sin-resultados"><b>No hay impresoras con estos filtros</b>${hayFiltros() ? `<button class="btn btn-sm" data-accion="limpiar-filtros">Quitar filtros</button>` : ""}</div>`;
+            const favs = new Set(favoritos);
+            const enFoco = document.activeElement && document.activeElement.closest && document.activeElement.closest("[data-id].row, .card[data-id]");
+            const idEnFoco = enFoco ? enFoco.dataset.id : null;
+
+            if (cards) {
+                $("#vistaCards").innerHTML = lista.length ? lista.map(p => {
+                    const id = escapeHTML(p.ID);
+                    return `<article class="card${seleccionadas.has(p.ID) ? " sel" : ""}${filaActiva === p.ID ? " activa" : ""}" data-id="${id}" tabindex="-1">
+                        <div class="card-top">
+                            <div class="titulo"><b>${resaltar(p.UBICACION || "—")}</b><span>${resaltar(p.EDIFICIO)}</span></div>
+                            <button class="fav${favs.has(p.ID) ? " on" : ""}" data-accion="fav" aria-label="Favorita" aria-pressed="${favs.has(p.ID)}">${icono("star")}</button>
+                        </div>
+                        <div>${htmlEstado(p)}</div>
+                        <div class="card-datos"><span>${resaltar(p.MARCA)} ${resaltar(p.MODELO)}</span><span>${htmlDireccion(p)}</span><span>#${resaltar(p.ID)}</span>${p.SERIAL ? `<span class="mono">S/N ${resaltar(p.SERIAL)}</span>` : ""}</div>
+                        ${htmlAcciones(p)}
+                    </article>`;
+                }).join("") : vacio;
+            } else {
+                $("#tabla").innerHTML = lista.length ? lista.map(p => {
+                    const id = escapeHTML(p.ID);
+                    const sel = seleccionadas.has(p.ID);
+                    return `<tr class="row${sel ? " sel" : ""}${filaActiva === p.ID ? " activa" : ""}" data-id="${id}" tabindex="-1">
+                        <td class="c-sel"><input type="checkbox" data-accion="sel" ${sel ? "checked" : ""} aria-label="Seleccionar ${escapeHTML(p.UBICACION)}"></td>
+                        <td class="c-fav"><button class="fav${favs.has(p.ID) ? " on" : ""}" data-accion="fav" aria-label="Favorita" aria-pressed="${favs.has(p.ID)}" title="Favorita (F)">${icono("star")}</button></td>
+                        <td class="c-estado">${htmlEstado(p)}</td>
+                        <td class="c-id mono">${resaltar(p.ID)}</td>
+                        <td class="c-lugar"><b>${resaltar(p.UBICACION || "—")}</b><span>${resaltar(p.EDIFICIO)}</span>${p._local ? ` <span class="etq" title="Cambio guardado solo en este navegador">${p._local === "nueva" ? "nueva" : "editada"}</span>` : ""}</td>
+                        <td class="c-equipo"><b>${resaltar(p.MARCA)}</b> <span>${resaltar(p.MODELO)}</span></td>
+                        <td class="c-ip">${htmlDireccion(p)}</td>
+                        <td class="c-serie mono">${p.SERIAL ? resaltar(p.SERIAL) : "—"}</td>
+                        <td class="c-info">${htmlInfo(p)}</td>
+                        <td class="c-acc">${htmlAcciones(p)}</td>
+                    </tr>`;
+                }).join("") : `<tr><td colspan="10">${vacio}</td></tr>`;
+                const todas = lista.length > 0 && lista.every(p => seleccionadas.has(p.ID));
+                $("#selectAll").checked = todas;
+                $("#selectAll").indeterminate = !todas && lista.some(p => seleccionadas.has(p.ID));
+            }
+            if (idEnFoco) {
+                const el = document.querySelector(`[data-id="${CSS.escape(idEnFoco)}"].row, .card[data-id="${CSS.escape(idEnFoco)}"]`);
+                if (el) el.focus({ preventScroll: true });
+            }
+            renderPaginacion();
+        }
+
+        function renderPaginacion() {
+            const total = paginas();
+            const c = $("#paginacion");
+            if (total <= 1 || imprimiendo) { c.innerHTML = ""; return; }
+            let html = `<button class="pag-btn" data-accion="pagina" data-valor="${paginaActual - 1}" ${paginaActual === 1 ? "disabled" : ""} aria-label="Anterior">‹</button>`;
+            for (let i = 1; i <= total; i++) {
+                if (i === 1 || i === total || Math.abs(i - paginaActual) <= 2) {
+                    html += `<button class="pag-btn${i === paginaActual ? " activo" : ""}" data-accion="pagina" data-valor="${i}">${i}</button>`;
+                } else if (Math.abs(i - paginaActual) === 3) {
+                    html += `<span class="pag-info">…</span>`;
+                }
+            }
+            html += `<button class="pag-btn" data-accion="pagina" data-valor="${paginaActual + 1}" ${paginaActual === total ? "disabled" : ""} aria-label="Siguiente">›</button>`;
+            c.innerHTML = html;
+        }
+        function cambiarPagina(n) {
+            if (n < 1 || n > paginas()) return;
+            paginaActual = n;
+            renderLista();
+            $("#lista").scrollIntoView({ behavior: "smooth", block: "start" });
+        }
+
+        function cambiarVista(vista) {
+            vistaActual = vista === "cards" ? "cards" : "tabla";
+            guardar(STORAGE_KEYS.vista, vistaActual);
+            renderLista();
+        }
+
+        // Título y favicon con el número de impresoras offline
+        const FAVICON_NORMAL = "icon.svg";
+        function faviconAlerta(n) {
+            const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#2c6e70"/><path d="M20 26V14h24v12M20 44h-4a4 4 0 0 1-4-4V30a4 4 0 0 1 4-4h32a4 4 0 0 1 4 4v10a4 4 0 0 1-4 4h-4M20 36h24v14H20z" fill="none" stroke="#fff" stroke-width="4" stroke-linejoin="round"/><circle cx="50" cy="14" r="13" fill="#dc2626"/><text x="50" y="19" font-family="Arial" font-weight="700" font-size="${n > 9 ? 13 : 16}" text-anchor="middle" fill="#fff">${n > 99 ? "99" : n}</text></svg>`;
+            return "data:image/svg+xml," + encodeURIComponent(svg);
+        }
+        let ultimoFavicon = -1;
+        function actualizarTitulo() {
+            const n = impresorasFinales.filter(p => claveEstado(p) === "offline").length;
+            document.title = (n ? `(${n}) ` : "") + "Impresoras · Informática";
+            if (n !== ultimoFavicon) {
+                ultimoFavicon = n;
+                $("#favicon").href = n ? faviconAlerta(n) : FAVICON_NORMAL;
+            }
+        }
+
+        // Tiempos relativos ("hace 3 min") sin repintar todo
+        setInterval(() => {
+            document.querySelectorAll("[data-t]").forEach(el => { el.textContent = textoRelativo(Number(el.dataset.t)); });
+            pintarCuentaAtras();
+        }, 1000 * 15);
+        setInterval(pintarCuentaAtras, 1000);
+
+        // ============================================
+        // SELECCIÓN MÚLTIPLE
+        // ============================================
+        function toggleSeleccion(id) {
+            if (seleccionadas.has(id)) seleccionadas.delete(id); else seleccionadas.add(id);
+            renderLista();
+            actualizarBarraSeleccion();
+        }
+        function seleccionarTodas(activar) {
+            listaVisible().forEach(p => activar ? seleccionadas.add(p.ID) : seleccionadas.delete(p.ID));
+            renderLista();
+            actualizarBarraSeleccion();
+        }
+        function actualizarBarraSeleccion() {
+            // Si una seleccionada ya no existe (eliminada), se quita
+            seleccionadas.forEach(id => { if (!porId.has(id)) seleccionadas.delete(id); });
+            $("#accionesLote").classList.toggle("activo", seleccionadas.size > 0);
+            $("#contadorSeleccionados").textContent = plural(seleccionadas.size, "seleccionada", "seleccionadas");
+        }
+        const listaSeleccionadas = () => [...seleccionadas].map(id => porId.get(id)).filter(Boolean);
+
+        // ============================================
+        // FICHA LATERAL
+        // ============================================
+        const ficha = { id: null, modo: "ver" };   // modo: ver | editar | nueva
+        let confirmarBorradoInc = null;
+
+        function abrirFicha(id, { enfocar = false } = {}) {
+            id = String(id);
+            const p = porId.get(id);
+            if (!p) return;
+            ficha.id = id;
+            ficha.modo = "ver";
+            filaActiva = id;
+            marcarReciente(id);
+            renderFicha();
+            document.body.classList.add("con-ficha");
+            $("#ficha").classList.add("abierta");
+            $("#ficha").setAttribute("aria-hidden", "false");
+            $("#fondoFicha").classList.add("activo");
+            renderLista();
+            renderLateral();
+            const fila = document.querySelector(`.row[data-id="${CSS.escape(id)}"], .card[data-id="${CSS.escape(id)}"]`);
+            if (fila) fila.scrollIntoView({ block: "nearest" });
+            if (enfocar || movil.matches) setTimeout(() => $("#ficha .ficha-head button")?.focus(), 30);
+        }
+        function cerrarFicha() {
+            if (!$("#ficha").classList.contains("abierta")) return;
+            const id = ficha.id;
+            ficha.id = null;
+            ficha.modo = "ver";
+            document.body.classList.remove("con-ficha");
+            $("#ficha").classList.remove("abierta");
+            $("#ficha").setAttribute("aria-hidden", "true");
+            $("#fondoFicha").classList.remove("activo");
+            const fila = id && document.querySelector(`.row[data-id="${CSS.escape(id)}"], .card[data-id="${CSS.escape(id)}"]`);
+            if (fila) fila.focus({ preventScroll: true });
+        }
+        const fichaAbierta = () => $("#ficha").classList.contains("abierta");
+
+        function fichaTexto(p) {
+            const e = estados[hostDe(p)];
+            const lineas = [
+                `Impresora #${p.ID} — ${p.MARCA} ${p.MODELO}`.trim(),
+                `Lugar: ${p.EDIFICIO} › ${p.UBICACION}`,
+                `IP: ${p["IP-PC"] || "—"}`,
+                `N.º de serie: ${p.SERIAL || "—"}`
+            ];
+            if (e) lineas.push(`Estado: ${ESTADO_INFO[e.estado].texto}${e.ms != null ? ` (${e.ms} ms)` : ""} · comprobado ${fechaHora(e.t)}`);
+            if (notas[p.ID]) lineas.push(`Nota: ${notas[p.ID]}`);
+            return lineas.join("\n");
+        }
+
+        function htmlCabeceraFicha(p, titulo, subtitulo) {
+            const i = ultimoResultado.findIndex(x => x.ID === ficha.id);
+            return `<div class="ficha-head">
+                <div class="titulo">
+                    ${p ? `<div id="fichaEstadoMini">${htmlEstado(p, false)}</div>` : ""}
+                    <h2 id="fichaTitulo">${titulo}</h2>
+                    <p>${subtitulo}</p>
+                </div>
+                ${p && ficha.modo === "ver" ? `<div class="ficha-nav">
+                    <button class="btn btn-icon btn-ghost btn-sm" data-accion="ficha-anterior" ${i <= 0 ? "disabled" : ""} aria-label="Anterior del listado" title="Anterior (↑)">${icono("chev-up")}</button>
+                    <button class="btn btn-icon btn-ghost btn-sm" data-accion="ficha-siguiente" ${i < 0 || i >= ultimoResultado.length - 1 ? "disabled" : ""} aria-label="Siguiente del listado" title="Siguiente (↓)">${icono("chev-down")}</button>
+                </div>` : ""}
+                <button class="btn btn-icon btn-ghost btn-sm" data-accion="cerrar-ficha" aria-label="Cerrar ficha" title="Cerrar (Esc)">${icono("x")}</button>
+            </div>`;
+        }
+
+        function htmlBloqueEstado(p) {
+            const h = hostDe(p);
+            const clave = estadoVisible(p);
+            const e = estados[h];
+            let info;
+            if (!h) {
+                const t = tipoDireccion(p);
+                info = t === "dhcp" ? "Toma la IP por DHCP: no se puede comprobar desde aquí."
+                    : t === "rango" ? "Tiene un rango de IPs; edítala y pon una IP por impresora para poder comprobarla."
+                    : t === "otra" ? "La dirección registrada no es una IP válida."
+                    : "No tiene IP registrada.";
+            } else if (clave === "comprobando") {
+                info = "Comprobando…";
+            } else if (e) {
+                info = `${escapeHTML(e.detalle || "")}<br><span title="${escapeHTML(fechaHora(e.t))}">Comprobado <span data-t="${e.t}">${textoRelativo(e.t)}</span></span>`;
+            } else {
+                info = "Todavía no se ha comprobado. Pulsa Ping.";
+            }
+            const pings = historial[h] || [];
+            const up = calcularUptime(h);
+            const ultimaCaida = [...pings].reverse().find(x => x.estado === "offline");
+            return `<div class="estado-box e-${clave}">${htmlEstado(p, false)}<div class="info">${info}</div></div>
+                ${pings.length ? `<div class="bloque" style="margin-top:12px">
+                    <h3>Historial <span class="der">${up}% respondiendo · ${plural(pings.length, "ping", "pings")}</span></h3>
+                    <div class="hist" aria-label="Historial de pings">${pings.map(x => `<i class="${escapeHTML(x.estado)}" title="${escapeHTML(fechaHora(x.fecha))}: ${escapeHTML((ESTADO_INFO[x.estado] || {}).texto || x.estado)}"></i>`).join("")}</div>
+                    <div class="hist-leyenda"><span>${escapeHTML(fechaHora(pings[0].fecha))}</span><span>${ultimaCaida ? "Última vez offline: " + escapeHTML(fechaHora(ultimaCaida.fecha)) : "Sin caídas registradas"}</span></div>
+                </div>` : ""}`;
+        }
+
+        function renderFicha() {
+            const cont = $("#ficha");
+            if (ficha.modo === "editar" || ficha.modo === "nueva") { renderFormulario(); return; }
+            const p = porId.get(ficha.id);
+            if (!p) { cerrarFicha(); return; }
+            const h = hostDe(p);
+            const web = urlWeb(p);
+            const incs = incidencias[p.ID] || [];
+            const fav = favoritos.includes(p.ID);
+            const fila = (etq, valor, copiable, mono) => `<dt>${etq}</dt><dd class="${mono ? "mono" : ""}">${valor ? escapeHTML(valor) : '<span class="muted">—</span>'}</dd>
+                <div class="copiar-cel">${copiable && valor ? `<button class="btn btn-icon btn-ghost btn-sm" data-accion="copiar" data-valor="${escapeHTML(valor)}" data-etiqueta="${escapeHTML(etq.toLowerCase())}" aria-label="Copiar ${escapeHTML(etq)}" title="Copiar">${icono("copy")}</button>` : ""}</div>`;
+
+            cont.innerHTML = htmlCabeceraFicha(p, `${escapeHTML(p.MARCA)} ${escapeHTML(p.MODELO)}`, `${escapeHTML(p.EDIFICIO)} › ${escapeHTML(p.UBICACION)}`) + `
+                <div class="ficha-body">
+                    <div class="ficha-acciones">
+                        ${web ? `<a class="btn btn-primary" href="${web}" target="_blank" rel="noopener" data-accion="web" title="Abrir la web de la impresora (W)">${icono("globe")}Abrir web</a>` : `<button class="btn btn-primary" disabled title="Sin IP">${icono("globe")}Abrir web</button>`}
+                        <button class="btn" data-accion="ping" ${h ? "" : "disabled"} title="Comprobar ahora (P)">${icono("ping")}Ping</button>
+                        <button class="btn" data-accion="copiar-ip" ${h ? "" : "disabled"} title="Copiar IP (C)">${icono("copy")}Copiar IP</button>
+                        <button class="btn" data-accion="ficha-ticket" title="Copia todos los datos para pegarlos en el parte o en un correo">${icono("clip")}Copiar ficha</button>
+                        <button class="btn" data-accion="fav" aria-pressed="${fav}" title="Favorita (F)">${icono("star")}${fav ? "Favorita" : "Añadir fav."}</button>
+                        <button class="btn" data-accion="qr" ${web ? "" : "disabled"} title="QR para abrir la web desde el móvil">${icono("qr")}QR</button>
+                    </div>
+
+                    <div id="fichaEstado">${htmlBloqueEstado(p)}</div>
+
+                    <div class="bloque">
+                        <h3>Datos ${p._local ? `<span class="etq">${p._local === "nueva" ? "añadida en este navegador" : "editada en este navegador"}</span>` : ""}
+                            <span class="der" data-rol="editor"><button class="btn btn-sm" data-accion="editar" title="Editar (E)">${icono("edit")}Editar</button></span></h3>
+                        <dl class="datos">
+                            ${fila("IP", p["IP-PC"], true, true)}
+                            ${fila("N.º serie", p.SERIAL, true, true)}
+                            ${fila("ID", p.ID, true, true)}
+                            ${fila("Marca", p.MARCA, false)}
+                            ${fila("Modelo", p.MODELO, true)}
+                            ${fila("Edificio", p.EDIFICIO, false)}
+                            ${fila("Ubicación", p.UBICACION, false)}
+                        </dl>
+                        ${web ? `<p class="muted" style="margin:8px 0 0;font-size:12.5px">¿No abre? Prueba por <a href="${urlWeb(p, true)}" target="_blank" rel="noopener" data-accion="web">https</a>.</p>` : ""}
+                    </div>
+
+                    <div class="bloque nota-fija">
+                        <h3>Nota fija <span class="der">driver, contraseña de admin, dónde está…</span></h3>
+                        <textarea id="notaTexto" placeholder="Algo que siempre haya que saber de esta impresora">${escapeHTML(notas[p.ID] || "")}</textarea>
+                        <div class="fila-botones"><button class="btn btn-sm" data-accion="nota-guardar">${icono("save")}Guardar nota</button></div>
+                    </div>
+
+                    <div class="bloque inc-form">
+                        <h3>Incidencias <span class="der">${incs.length ? plural(incs.length, "anotada", "anotadas") : ""}</span></h3>
+                        <textarea id="incTexto" placeholder="Qué pasó y qué se hizo. Ej: atasco en bandeja 2, cambiado rodillo"></textarea>
+                        <div class="fila-botones"><span class="pista"><kbd>Ctrl</kbd>+<kbd>Enter</kbd> para guardar</span><button class="btn btn-sm btn-primary" data-accion="incidencia-guardar">${icono("plus")}Anotar</button></div>
+                        ${incs.length ? `<ul class="inc-lista">${incs.map(x => `<li><small>${escapeHTML(fechaHora(x.t))}${x.autor ? " · " + escapeHTML(x.autor) : ""}</small>${escapeHTML(x.texto)}
+                            <button class="btn btn-icon btn-ghost btn-sm borrar" data-accion="incidencia-borrar" data-inc="${escapeHTML(x.id)}" aria-label="Borrar incidencia" title="Borrar">${icono("x")}</button></li>`).join("")}</ul>` : ""}
+                    </div>
+
+                    <div class="bloque" data-rol="editor">
+                        <h3>Inventario</h3>
+                        <div class="fila-botones" style="justify-content:flex-start;margin:0">
+                            ${p._local === "editada" ? `<button class="btn btn-sm" data-accion="restaurar">${icono("undo")}Deshacer mis cambios</button>` : ""}
+                            <button class="btn btn-sm" data-accion="eliminar" data-rol="admin" style="color:var(--bad)">${icono("trash")}Dar de baja</button>
+                        </div>
+                    </div>
+                </div>`;
+        }
+
+        // Solo se repinta el estado (para no borrar lo que se esté escribiendo)
+        function refrescarEstadoFicha() {
+            if (!fichaAbierta() || ficha.modo !== "ver") return;
+            const p = porId.get(ficha.id);
+            if (!p) { cerrarFicha(); return; }
+            const bloque = $("#fichaEstado");
+            if (bloque) bloque.innerHTML = htmlBloqueEstado(p);
+            const mini = $("#fichaEstadoMini");
+            if (mini) mini.innerHTML = htmlEstado(p, false);
+        }
+
+        function moverFicha(delta) {
+            const i = ultimoResultado.findIndex(x => x.ID === ficha.id);
+            const sig = ultimoResultado[i + delta];
+            if (sig) {
+                const pag = Number(configuracion.paginacion) || 0;
+                if (pag) paginaActual = Math.floor(ultimoResultado.indexOf(sig) / pag) + 1;
+                abrirFicha(sig.ID);
+            }
+        }
+
+        // ============================================
+        // FORMULARIO: EDITAR / NUEVA
+        // ============================================
+        function sugerencias(campo) {
+            return [...new Set(impresorasFinales.map(p => p[campo]).filter(Boolean))].sort((a, b) => a.localeCompare(b, "es"));
+        }
+        function renderFormulario() {
+            const nueva = ficha.modo === "nueva";
+            const p = nueva ? { ID: "", EDIFICIO: filtros.edificio || "", UBICACION: "", MARCA: filtros.marca || "", MODELO: "", "IP-PC": "", SERIAL: "" } : porId.get(ficha.id);
+            if (!p) { cerrarFicha(); return; }
+            const campo = (id, etq, valor, extra = "") => `<label${extra.includes("full") ? ' class="full"' : ""}>${etq}<input id="${id}" value="${escapeHTML(valor)}" ${extra.replace("full", "")}></label>`;
+            const lista = (id, valores) => `<datalist id="${id}">${valores.map(v => `<option value="${escapeHTML(v)}">`).join("")}</datalist>`;
+            $("#ficha").innerHTML = htmlCabeceraFicha(null, nueva ? "Nueva impresora" : "Editar impresora", nueva ? "Se guarda en este navegador. Luego descarga el fichero para que la vean todos." : `#${escapeHTML(p.ID)} · ${escapeHTML(p.EDIFICIO)} › ${escapeHTML(p.UBICACION)}`) + `
+                <form class="ficha-body" id="formImpresora" novalidate>
+                    <div class="form-grid">
+                        ${campo("fId", "ID *", p.ID, nueva ? 'required autocomplete="off"' : "readonly")}
+                        ${campo("fIP", "IP o nombre de equipo", p["IP-PC"], 'autocomplete="off" spellcheck="false" placeholder="10.35.0.0"')}
+                        ${campo("fEdificio", "Edificio", p.EDIFICIO, 'list="dlEdificio" autocomplete="off"')}
+                        ${campo("fUbicacion", "Ubicación", p.UBICACION, 'list="dlUbicacion" autocomplete="off"')}
+                        ${campo("fMarca", "Marca", p.MARCA, 'list="dlMarca" autocomplete="off"')}
+                        ${campo("fModelo", "Modelo", p.MODELO, 'list="dlModelo" autocomplete="off"')}
+                        ${campo("fSerial", "N.º de serie", p.SERIAL, 'full autocomplete="off" spellcheck="false"')}
+                    </div>
+                    ${lista("dlEdificio", sugerencias("EDIFICIO"))}${lista("dlUbicacion", sugerencias("UBICACION"))}${lista("dlMarca", sugerencias("MARCA"))}${lista("dlModelo", sugerencias("MODELO"))}
+                    <div class="form-error" id="formError" role="alert"></div>
+                    <div class="fila-botones">
+                        <button type="button" class="btn" data-accion="form-cancelar">Cancelar</button>
+                        <button type="submit" class="btn btn-primary">${icono("save")}${nueva ? "Añadir impresora" : "Guardar cambios"}</button>
+                    </div>
+                </form>`;
+            $("#formImpresora").addEventListener("submit", (e) => { e.preventDefault(); guardarFormulario(); });
+            setTimeout(() => (nueva ? $("#fId") : $("#fIP")).focus(), 30);
+        }
+
+        function validarDireccion(v) {
+            if (!v || v === "-" || v.toUpperCase() === "DHCP") return true;
+            return esIPv4(v) || /^[A-Za-z][A-Za-z0-9-]{1,62}$/.test(v);
+        }
+
+        function guardarFormulario() {
+            const val = (id) => $("#" + id).value.trim();
+            const nueva = ficha.modo === "nueva";
+            const datos = normalizarImpresora({
+                ID: val("fId"), EDIFICIO: val("fEdificio"), UBICACION: val("fUbicacion"),
+                MARCA: val("fMarca"), MODELO: val("fModelo"), "IP-PC": val("fIP"), SERIAL: val("fSerial")
+            });
+            document.querySelectorAll("#formImpresora input").forEach(i => i.classList.remove("error"));
+            const error = (msg, campo) => { $("#formError").textContent = msg; if (campo) { $("#" + campo).classList.add("error"); $("#" + campo).focus(); } };
+
+            if (!datos.ID) return error("El ID es obligatorio.", "fId");
+            if (nueva && (porId.has(datos.ID) || bajas.includes(datos.ID))) return error(`Ya existe una impresora con el ID ${datos.ID}.`, "fId");
+            if (!validarDireccion(datos["IP-PC"])) return error(`“${datos["IP-PC"]}” no es una IP válida (ej: 10.35.236.69) ni un nombre de equipo.`, "fIP");
+            if (esIPv4(datos["IP-PC"])) {
+                const otra = impresorasFinales.find(x => x["IP-PC"] === datos["IP-PC"] && x.ID !== datos.ID);
+                if (otra && !$("#formImpresora").dataset.avisado) {
+                    $("#formImpresora").dataset.avisado = "1";
+                    return error(`Ojo: la IP ya la tiene la #${otra.ID} (${otra.UBICACION}). Pulsa guardar otra vez si es correcto.`, "fIP");
+                }
+            }
+
+            const locales = obtenerLocales().map(normalizarImpresora);
+            const i = locales.findIndex(x => x.ID === datos.ID);
+            if (i >= 0) locales[i] = datos; else locales.push(datos);
+
+            // Si ha quedado igual que la original, no hace falta guardarla como cambio
+            const original = hayDatosBase ? impresoras.map(normalizarImpresora).find(x => x.ID === datos.ID) : null;
+            const iguales = original && Object.keys(datos).every(k => datos[k] === original[k]);
+            guardarLocales(iguales ? locales.filter(x => x.ID !== datos.ID) : locales);
+
+            reconstruirDatos();
+            agregarLog(`Impresora #${datos.ID} ${nueva ? "añadida" : "actualizada"}`, "success");
+            mostrarToast(nueva ? "Impresora añadida" : "Cambios guardados", "success");
+            ficha.modo = "ver";
+            abrirFicha(datos.ID);
+            actualizar();
+            actualizarAvisosMenu();
+        }
+
+        function editarEnFicha(id) {
+            if (id) ficha.id = String(id);
+            ficha.modo = "editar";
+            renderFicha();
+            if (!fichaAbierta()) {
+                document.body.classList.add("con-ficha");
+                $("#ficha").classList.add("abierta");
+                $("#ficha").setAttribute("aria-hidden", "false");
+                $("#fondoFicha").classList.add("activo");
+            }
+        }
+        function nuevaEnFicha() {
+            ficha.id = null;
+            ficha.modo = "nueva";
+            renderFicha();
+            document.body.classList.add("con-ficha");
+            $("#ficha").classList.add("abierta");
+            $("#ficha").setAttribute("aria-hidden", "false");
+            $("#fondoFicha").classList.add("activo");
+        }
+
+        function restaurarOriginal(id) {
+            guardarLocales(obtenerLocales().filter(x => String(x.ID).trim() !== id));
+            reconstruirDatos();
+            agregarLog(`Impresora #${id}: deshechos los cambios locales`, "info");
+            mostrarToast("Se ha vuelto a los datos del fichero", "success");
+            renderFicha();
+            actualizar();
+            actualizarAvisosMenu();
+        }
+
+        function confirmarEliminar(id) {
+            const p = porId.get(id);
+            if (!p) return;
+            mostrarModal({
+                titulo: "Dar de baja la impresora",
+                contenido: `<p>¿Quitar del inventario la <b>#${escapeHTML(p.ID)}</b> · ${escapeHTML(p.MARCA)} ${escapeHTML(p.MODELO)} (${escapeHTML(p.EDIFICIO)} › ${escapeHTML(p.UBICACION)})?</p>
+                    <p class="muted">Se quita en este navegador. Para que desaparezca para todos, descarga después el fichero de impresoras y sustitúyelo.</p>`,
+                acciones: [
+                    { texto: "Dar de baja", clase: "btn-danger", onClick: () => eliminarImpresora(id) },
+                    { texto: "Cancelar", clase: "btn-light" }
+                ]
+            });
+        }
+        function eliminarImpresora(id) {
+            const locales = obtenerLocales();
+            const localAntes = locales.find(x => String(x.ID).trim() === id);
+            guardarLocales(locales.filter(x => String(x.ID).trim() !== id));
+            const eraBase = idsBase.has(id);
+            if (eraBase && !bajas.includes(id)) { bajas.push(id); guardar(STORAGE_KEYS.bajas, bajas); }
+            seleccionadas.delete(id);
+            reconstruirDatos();
+            cerrarFicha();
+            actualizar();
+            actualizarAvisosMenu();
+            agregarLog(`Impresora #${id} dada de baja`, "warning");
+            mostrarToast(`Impresora #${id} dada de baja`, "success", {
+                accion: { texto: "Deshacer", fn: () => {
+                    bajas = bajas.filter(x => x !== id);
+                    guardar(STORAGE_KEYS.bajas, bajas);
+                    if (localAntes) guardarLocales([...obtenerLocales(), localAntes]);
+                    reconstruirDatos(); actualizar(); actualizarAvisosMenu();
+                    agregarLog(`Impresora #${id}: baja deshecha`, "info");
+                } }
+            });
+        }
+
+        // ============================================
+        // QR (generado en el propio navegador)
+        // ============================================
+        function svgQR(texto) {
+            if (typeof qrcode !== "function") return null;
+            const qr = qrcode(0, "M");
+            qr.addData(texto);
+            qr.make();
+            return qr.createSvgTag({ cellSize: 6, margin: 2, scalable: true });
+        }
+        function mostrarQR(id) {
+            const p = porId.get(id);
+            const url = p && urlWeb(p);
+            if (!url) { mostrarToast("Esta impresora no tiene IP", "warning"); return; }
+            const svg = svgQR(url);
+            if (!svg) { mostrarToast("Falta el archivo qrcode.min.js junto a la página", "danger"); return; }
+            mostrarModal({
+                titulo: "Código QR",
+                contenido: `<div class="qr-container">
+                    <div class="qr-image">${svg}</div>
+                    <div class="qr-info">
+                        <p><b>${escapeHTML(p.MARCA + " " + p.MODELO)}</b></p>
+                        <p>${escapeHTML(p.EDIFICIO + " › " + p.UBICACION)}</p>
+                        <p class="mono">${escapeHTML(url)}</p>
+                        <p class="muted" style="font-size:13px">Imprímelo y pégalo en la impresora: al escanearlo con el móvil se abre su página web.</p>
+                    </div></div>`,
+                acciones: [
+                    { texto: "Imprimir QR", clase: "btn-primary", cerrar: false, onClick: () => imprimirQR(p, svg, url) },
+                    { texto: "Cerrar", clase: "btn-light" }
+                ]
+            });
+        }
+        function imprimirQR(p, svg, url) {
+            const v = window.open("", "_blank");
+            if (!v) { mostrarToast("El navegador ha bloqueado la ventana. Permítela e inténtalo otra vez.", "danger"); return; }
+            v.document.write(`<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"><title>QR ${escapeHTML(p.ID)}</title></head>
+                <body style="text-align:center;font-family:Arial,sans-serif;padding:40px">
+                <div style="width:300px;height:300px;margin:0 auto">${svg}</div>
+                <h2>${escapeHTML(p.MARCA + " " + p.MODELO)}</h2>
+                <p>${escapeHTML(p.EDIFICIO + " › " + p.UBICACION)}</p>
+                <p style="font-family:monospace">${escapeHTML(url)} · #${escapeHTML(p.ID)}</p>
+                <script>window.onload=function(){window.print()}<\/script></body></html>`);
+            v.document.close();
+        }
+
+        // ============================================
+        // EXPORTAR / IMPORTAR
+        // ============================================
+        const CABECERA_CSV = ["ID", "EDIFICIO", "UBICACION", "MARCA", "MODELO", "IP-PC", "SERIAL"];
+        function exportarListaCSV(lista, nombre) {
+            if (!lista.length) { mostrarToast("No hay datos para exportar", "warning"); return; }
+            const filas = lista.map(p => [...CABECERA_CSV.map(c => p[c] ?? ""), ESTADO_INFO[claveEstado(p)].texto, notas[p.ID] || ""]);
+            const csv = [[...CABECERA_CSV, "ESTADO", "NOTA"], ...filas]
+                .map(f => f.map(v => `"${String(v).replace(/"/g, '""')}"`).join(";"))
+                .join("\r\n");
+            descargar(nombre, "﻿" + csv, "text/csv;charset=utf-8");
+            mostrarToast(`Exportadas ${lista.length} impresoras a ${nombre}`, "success");
+            agregarLog(`Exportadas ${lista.length} impresoras a CSV`, "success");
+        }
+        function exportarCSV() { exportarListaCSV(ultimoResultado, "impresoras_filtradas.csv"); }
+
+        // Fichero de datos con los cambios hechos aquí, listo para sustituir al original
+        function descargarFicheroDatos() {
+            const lista = impresorasFinales.map(p => ({
+                ID: /^\d+$/.test(p.ID) ? Number(p.ID) : p.ID,
+                EDIFICIO: p.EDIFICIO, UBICACION: p.UBICACION, MARCA: p.MARCA, MODELO: p.MODELO,
+                "IP-PC": p["IP-PC"], SERIAL: p.SERIAL || null
+            })).sort((a, b) => String(a.EDIFICIO).localeCompare(String(b.EDIFICIO), "es") || String(a.UBICACION).localeCompare(String(b.UBICACION), "es"));
+            const txt = `/*Fichero con las impresoras conectadas a la red unicamente mediante IP*/\n/* Actualizado desde el panel el ${fechaHora(Date.now())} */\nconst impresoras = ${JSON.stringify(lista, null, 2)};\n`;
+            descargar("impresoras_con_serial.js", txt, "text/javascript;charset=utf-8");
+            agregarLog(`Descargado impresoras_con_serial.js (${lista.length} impresoras)`, "success");
+            mostrarModal({
+                titulo: "Fichero descargado",
+                contenido: `<p>Se ha descargado <b>impresoras_con_serial.js</b> con ${lista.length} impresoras, incluidos tus cambios.</p>
+                    <p>Para que todo el equipo vea los cambios, sustituye con él el fichero de la carpeta del panel (o súbelo al repositorio).</p>
+                    <p class="muted">Cuando lo hayas sustituido puedes borrar tus cambios locales para que no se dupliquen.</p>`,
+                acciones: [
+                    { texto: "Ya lo he sustituido: borrar cambios locales", clase: "btn-light", onClick: () => {
+                        guardarLocales([]); bajas = []; guardar(STORAGE_KEYS.bajas, bajas);
+                        mostrarToast("Cambios locales borrados. Recarga la página para cargar el fichero nuevo.", "success", { duracion: 7000 });
+                        reconstruirDatos(); actualizar(); actualizarAvisosMenu();
+                    } },
+                    { texto: "Cerrar", clase: "btn-primary" }
+                ]
+            });
+        }
+        function numeroCambiosLocales() { return obtenerLocales().length + bajas.length; }
+
+        function parsearCSV(texto) {
+            texto = texto.replace(/^﻿/, "");
+            const primera = texto.split(/\r?\n/, 1)[0] || "";
+            const sep = (primera.match(/;/g) || []).length >= (primera.match(/,/g) || []).length ? ";" : ",";
+            const filas = [];
+            let fila = [], campo = "", comillas = false;
+            for (let i = 0; i < texto.length; i++) {
+                const c = texto[i];
+                if (comillas) {
+                    if (c === '"') {
+                        if (texto[i + 1] === '"') { campo += '"'; i++; } else comillas = false;
+                    } else campo += c;
+                } else if (c === '"') comillas = true;
+                else if (c === sep) { fila.push(campo); campo = ""; }
+                else if (c === "\n" || c === "\r") {
+                    if (c === "\r" && texto[i + 1] === "\n") i++;
+                    fila.push(campo); filas.push(fila); fila = []; campo = "";
+                } else campo += c;
+            }
+            if (campo !== "" || fila.length) { fila.push(campo); filas.push(fila); }
+            return filas.filter(f => f.some(v => v.trim() !== ""));
+        }
+        const ALIAS_COLUMNAS = { "ID": "ID", "EDIFICIO": "EDIFICIO", "UBICACION": "UBICACION", "MARCA": "MARCA", "MODELO": "MODELO", "IP-PC": "IP-PC", "IP": "IP-PC", "IP PC": "IP-PC", "DIRECCION IP": "IP-PC", "SERIAL": "SERIAL", "SERIE": "SERIAL", "N SERIE": "SERIAL", "NUMERO DE SERIE": "SERIAL", "NUM SERIE": "SERIAL", "NOTA": "_NOTA" };
+
+        function leerArchivoImpresoras(nombre, contenido) {
+            let lista = [];
+            if (/\.js$/i.test(nombre) || /const\s+impresoras\s*=/.test(contenido)) {
+                const ini = contenido.indexOf("["), fin = contenido.lastIndexOf("]");
+                lista = JSON.parse(contenido.slice(ini, fin + 1));
+            } else if (/\.json$/i.test(nombre) || /^\s*[\[{]/.test(contenido)) {
+                const d = JSON.parse(contenido);
+                lista = Array.isArray(d) ? d : Array.isArray(d.impresoras) ? d.impresoras : [];
+            } else {
+                const filas = parsearCSV(contenido);
+                const cab = (filas.shift() || []).map(h => ALIAS_COLUMNAS[normalizar(h).toUpperCase().replace(/[º.]/g, "").replace(/\s+/g, " ").trim()] || null);
+                lista = filas.map(f => { const o = {}; cab.forEach((c, i) => { if (c) o[c] = f[i] ?? ""; }); return o; });
+            }
+            return lista;
+        }
+
+        function abrirImportar() {
+            mostrarModal({
+                titulo: "Importar impresoras",
+                contenido: `<p>Elige un <b>CSV</b> (separado por <code>;</code> o <code>,</code>), un <b>JSON</b> o un <b>impresoras_con_serial.js</b>.</p>
+                    <p class="muted" style="font-size:13px">Columnas: ID, EDIFICIO, UBICACION, MARCA, MODELO, IP-PC (o IP), SERIAL (o SERIE). Antes de aplicar nada verás cuántas se añaden y cuántas cambian.</p>`,
+                acciones: [
+                    { texto: "Elegir archivo", clase: "btn-primary", onClick: () => { const inp = $("#inputImportar"); inp.onchange = procesarArchivoImportar; inp.accept = ".csv,.json,.js,.txt"; inp.click(); } },
+                    { texto: "Cancelar", clase: "btn-light" }
+                ]
+            });
+        }
+        function procesarArchivoImportar(event) {
+            const file = event.target.files[0];
+            event.target.value = "";
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                let importadas;
+                try {
+                    importadas = leerArchivoImpresoras(file.name, String(e.target.result)).map(o => ({ p: normalizarImpresora(o), nota: o._NOTA }));
+                } catch (err) {
+                    mostrarToast("No se pudo leer el archivo: " + err.message, "danger");
+                    return;
+                }
+                const validas = importadas.filter(x => x.p.ID);
+                const sinId = importadas.length - validas.length;
+                const nuevas = validas.filter(x => !porId.has(x.p.ID)).length;
+                const cambian = validas.filter(x => {
+                    const a = porId.get(x.p.ID);
+                    return a && CABECERA_CSV.some(c => a[c] !== x.p[c]);
+                }).length;
+                mostrarModal({
+                    titulo: "Revisar importación",
+                    contenido: `<p><b>${escapeHTML(file.name)}</b>: ${plural(validas.length, "impresora", "impresoras")}.</p>
+                        <ul><li>${plural(nuevas, "nueva", "nuevas")}</li><li>${plural(cambian, "con cambios", "con cambios")}</li><li>${validas.length - nuevas - cambian} iguales (no cambia nada)</li>${sinId ? `<li style="color:var(--bad)">${sinId} filas sin ID (se ignoran)</li>` : ""}</ul>`,
+                    acciones: [
+                        { texto: `Importar ${nuevas + cambian}`, clase: "btn-primary", onClick: () => {
+                            const locales = new Map(obtenerLocales().map(normalizarImpresora).map(p => [p.ID, p]));
+                            validas.forEach(x => {
+                                const a = porId.get(x.p.ID);
+                                if (!a || CABECERA_CSV.some(c => a[c] !== x.p[c])) locales.set(x.p.ID, x.p);
+                                if (x.nota && x.nota.trim()) notas[x.p.ID] = x.nota.trim();
+                            });
+                            guardarLocales([...locales.values()]);
+                            guardar(STORAGE_KEYS.notas, notas);
+                            reconstruirDatos();
+                            actualizar();
+                            actualizarAvisosMenu();
+                            agregarLog(`Importadas ${nuevas} nuevas y ${cambian} con cambios desde ${file.name}`, "success");
+                            mostrarToast(`Importación hecha: ${nuevas} nuevas · ${cambian} actualizadas`, "success");
+                        } },
+                        { texto: "Cancelar", clase: "btn-light" }
+                    ]
+                });
+            };
+            reader.readAsText(file);
+        }
+
+        // ============================================
+        // COPIA DE SEGURIDAD
+        // ============================================
+        function abrirModalBackup() {
+            mostrarModal({
+                titulo: "Copia de seguridad",
+                contenido: `<p>Guarda o recupera <b>todo lo que este navegador tiene del panel</b>: favoritas, notas, incidencias, cambios en el inventario, estados, historial, registro y configuración.</p>
+                    <p class="muted" style="font-size:13px">Sirve para pasar tus datos a otro ordenador o navegador.</p>`,
+                acciones: [
+                    { texto: "Descargar copia", clase: "btn-primary", cerrar: false, onClick: descargarBackup },
+                    { texto: "Restaurar copia", clase: "btn-light", cerrar: false, onClick: () => { const inp = $("#inputImportar"); inp.onchange = procesarArchivoBackup; inp.accept = ".json"; inp.click(); } },
+                    { texto: "Cerrar", clase: "btn-light" }
+                ]
+            });
+        }
+        function descargarBackup() {
+            const datos = {
+                fecha: new Date().toISOString(),
+                version: "3.0",
+                favoritos, locales: obtenerLocales(), bajas, notas, incidencias,
+                estados, historial, recientes, logs: obtenerLogs(), configuracion
+            };
+            descargar(`backup_panel_impresoras_${new Date().toISOString().slice(0, 10)}.json`, JSON.stringify(datos, null, 2), "application/json");
+            mostrarToast("Copia de seguridad descargada", "success");
+            agregarLog("Copia de seguridad descargada", "success");
+        }
+        function procesarArchivoBackup(event) {
+            const file = event.target.files[0];
+            event.target.value = "";
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const d = JSON.parse(e.target.result);
+                    if (typeof d !== "object" || !d) throw new Error("formato no válido");
+                    if (Array.isArray(d.favoritos)) { favoritos = d.favoritos.map(String); guardar(STORAGE_KEYS.favoritos, favoritos); }
+                    if (Array.isArray(d.locales)) guardarLocales(d.locales);
+                    if (Array.isArray(d.bajas)) { bajas = d.bajas.map(String); guardar(STORAGE_KEYS.bajas, bajas); }
+                    if (d.notas) { notas = d.notas; guardar(STORAGE_KEYS.notas, notas); }
+                    if (d.incidencias) { incidencias = d.incidencias; guardar(STORAGE_KEYS.incidencias, incidencias); }
+                    if (d.estados) { estados = d.estados; guardar(STORAGE_KEYS.estados, estados); }
+                    if (d.historial) { historial = d.historial; guardar(STORAGE_KEYS.historial, historial); }
+                    if (Array.isArray(d.recientes)) { recientes = d.recientes.map(String); guardar(STORAGE_KEYS.recientes, recientes); }
+                    if (Array.isArray(d.logs)) guardar(STORAGE_KEYS.logs, d.logs);
+                    if (d.configuracion) {
+                        guardar(STORAGE_KEYS.config, d.configuracion);
+                        configuracion = cargarConfiguracion();
+                    }
+                    reconstruirDatos();
+                    actualizar();
+                    actualizarAvisosMenu();
+                    programarVigilancia(false);
+                    cerrarModal();
+                    agregarLog(`Copia restaurada desde ${file.name}`, "success");
+                    mostrarToast("Copia de seguridad restaurada", "success");
+                } catch (err) {
+                    mostrarToast("No se pudo restaurar: " + err.message, "danger");
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        // ============================================
+        // REVISAR INVENTARIO
+        // ============================================
+        function problemasInventario() {
+            const porIP = new Map();
+            impresorasFinales.filter(p => tipoDireccion(p) === "ip").forEach(p => {
+                if (!porIP.has(p["IP-PC"])) porIP.set(p["IP-PC"], []);
+                porIP.get(p["IP-PC"]).push(p);
+            });
+            return {
+                duplicadas: [...porIP.values()].filter(l => l.length > 1),
+                sinIP: impresorasFinales.filter(p => !hostDe(p)),
+                porEquipo: impresorasFinales.filter(p => tipoDireccion(p) === "equipo"),
+                sinSerie: impresorasFinales.filter(p => !p.SERIAL)
+            };
+        }
+        function actualizarAvisosMenu() {
+            const pr = problemasInventario();
+            const n = pr.duplicadas.length + pr.sinIP.length;
+            $("#menuAvisos").textContent = n ? plural(n, "aviso", "avisos") : "";
+            const c = numeroCambiosLocales();
+            $("#menuCambios").hidden = !c;
+            $("#menuCambios").textContent = c ? plural(c, "cambio", "cambios") : "";
+        }
+        function abrirRevisar() {
+            const pr = problemasInventario();
+            const enlace = (p) => `<button data-accion="abrir-id" data-id="${escapeHTML(p.ID)}" title="${escapeHTML(p.EDIFICIO + " › " + p.UBICACION)}">#${escapeHTML(p.ID)} · ${escapeHTML(p.UBICACION || p.EDIFICIO)}</button>`;
+            const grupo = (titulo, desc, contenido, n) => `<div class="revisar-grupo"><h4>${titulo} <span class="etq">${n}</span></h4><p>${desc}</p>${contenido}</div>`;
+            let html = "";
+            html += grupo("IPs repetidas", "Dos impresoras con la misma IP: una de las dos está mal apuntada.",
+                pr.duplicadas.length ? pr.duplicadas.map(l => `<p class="mono" style="margin:6px 0 4px;color:var(--text)">${escapeHTML(l[0]["IP-PC"])}</p><div class="lista-links">${l.map(enlace).join("")}</div>`).join("") : `<p>Ninguna. ${icono("check")}</p>`, pr.duplicadas.length);
+            html += grupo("Sin IP que se pueda comprobar", "DHCP, vacías, rangos o valores raros. No se pueden pingar ni abrir.",
+                `<div class="lista-links">${pr.sinIP.map(p => enlace(p).replace("</button>", ` · <span class="mono">${escapeHTML(p["IP-PC"] || "vacía")}</span></button>`)).join("")}</div>`, pr.sinIP.length);
+            html += grupo("Conectadas a un PC", "La dirección es un nombre de equipo: el ping comprueba el PC, no la impresora.",
+                `<div class="lista-links">${pr.porEquipo.map(enlace).join("") || "<span class='muted'>Ninguna</span>"}</div>`, pr.porEquipo.length);
+            html += grupo("Sin número de serie", "Hace falta para dar partes al técnico de la marca.",
+                `<div class="lista-links">${pr.sinSerie.slice(0, 200).map(enlace).join("")}</div>`, pr.sinSerie.length);
+            mostrarModal({ titulo: "Revisar inventario", contenido: html, grande: true, acciones: [
+                { texto: "Filtrar las sin IP", clase: "btn-light", onClick: () => setFiltro("estado", "sinip", true) },
+                { texto: "Cerrar", clase: "btn-primary" }
+            ] });
+        }
+
+        // ============================================
+        // CONFIGURACIÓN, ROLES Y TEMA
+        // ============================================
+        let rolActual = "admin";
+        function cambiarRol(rol, silencioso) {
+            if (!["admin", "tecnico", "lector"].includes(rol)) rol = "admin";
+            rolActual = rol;
+            document.body.classList.remove("role-admin", "role-tecnico", "role-lector");
+            document.body.classList.add("role-" + rol);
+            $("#roleBadge").textContent = { admin: "Administrador", tecnico: "Técnico", lector: "Solo lectura" }[rol];
+            guardar(STORAGE_KEYS.rol, rol);
+            if (!silencioso) agregarLog(`Rol cambiado a ${rol}`, "info");
+        }
+
+        function abrirModalConfig() {
+            const c = configuracion;
+            const opt = (v, t, actual) => `<option value="${v}" ${String(actual) === String(v) ? "selected" : ""}>${t}</option>`;
+            mostrarModal({
+                titulo: "Configuración",
+                contenido: `
+                    <label for="cfgApi">Servidor de ping</label>
+                    <input id="cfgApi" value="${escapeHTML(c.apiBase)}" placeholder="Automático: ${escapeHTML(/^https?:$/.test(location.protocol) ? location.origin : "http://localhost:3000")}">
+                    <div class="ayuda-campo">Déjalo vacío para usar el mismo equipo desde el que abres el panel. Ejemplo si el servidor está en otro PC: <code>http://10.35.1.50:3000</code>${servidor.version ? ` · versión conectada: ${escapeHTML(servidor.version)}` : ""}${servidor.version === "anterior" ? " (actualiza server.js para medir tiempos y evitar falsos online en Windows)" : ""}</div>
+
+                    <label for="cfgIniciales">Tus iniciales</label>
+                    <input id="cfgIniciales" value="${escapeHTML(c.iniciales)}" maxlength="12" placeholder="Ej: IB">
+                    <div class="ayuda-campo">Se guardan en las incidencias que anotes.</div>
+
+                    <label for="cfgVigMin">Vigilancia: cada cuánto comprobar</label>
+                    <select id="cfgVigMin">${[2, 5, 10, 15, 30].map(m => opt(m, `${m} minutos`, c.vigilancia.minutos)).join("")}</select>
+                    <label for="cfgVigAlc">Vigilancia: qué impresoras</label>
+                    <select id="cfgVigAlc">${opt("todas", "Todas", c.vigilancia.alcance)}${opt("favoritas", "Solo mis favoritas", c.vigilancia.alcance)}</select>
+
+                    <label for="cfgConc">Pings a la vez</label>
+                    <select id="cfgConc">${[4, 6, 10, 16, 24].map(n => opt(n, n === 10 ? "10 (recomendado)" : String(n), c.concurrencia)).join("")}</select>
+                    <div class="ayuda-campo">Más es más rápido; bájalo si la red o el servidor van justos.</div>
+
+                    <label for="cfgPag">Impresoras por página</label>
+                    <select id="cfgPag">${opt(0, "Todas (recomendado)", c.paginacion)}${[25, 50, 100].map(n => opt(n, n, c.paginacion)).join("")}</select>
+
+                    <label for="cfgRol">Rol</label>
+                    <select id="cfgRol">${opt("admin", "Administrador (todo)", rolActual)}${opt("tecnico", "Técnico (edita, no da de baja)", rolActual)}${opt("lector", "Solo lectura", rolActual)}</select>
+                    <div class="ayuda-campo">Solo cambia lo que se ve en este navegador.</div>`,
+                acciones: [
+                    { texto: "Guardar", clase: "btn-primary", onClick: () => {
+                        const apiAntes = apiBase();
+                        c.apiBase = $("#cfgApi").value.trim().replace(/\/+$/, "");
+                        c.iniciales = $("#cfgIniciales").value.trim();
+                        c.vigilancia.minutos = Number($("#cfgVigMin").value);
+                        c.vigilancia.alcance = $("#cfgVigAlc").value;
+                        c.concurrencia = Number($("#cfgConc").value);
+                        c.paginacion = Number($("#cfgPag").value);
+                        guardarConfiguracion();
+                        cambiarRol($("#cfgRol").value);
+                        agregarLog("Configuración actualizada", "info");
+                        mostrarToast("Configuración guardada", "success");
+                        if (apiBase() !== apiAntes) comprobarServidor(true);
+                        programarVigilancia(false);
+                        paginaActual = 1;
+                        actualizar();
+                    } },
+                    { texto: "Cancelar", clase: "btn-light" }
+                ]
+            });
+        }
+
+        function aplicarTema() {
+            const oscuro = document.documentElement.classList.contains("dark");
+            $("#btnTema").innerHTML = icono(oscuro ? "sun" : "moon");
+            $("#btnTema").setAttribute("aria-label", oscuro ? "Cambiar a modo claro" : "Cambiar a modo oscuro");
+            document.querySelector('meta[name="theme-color"]').content = oscuro ? "#141c23" : "#2c6e70";
+        }
+        function toggleDarkMode() {
+            const oscuro = document.documentElement.classList.toggle("dark");
+            guardar(STORAGE_KEYS.modo, oscuro ? "dark" : "light");
+            aplicarTema();
+        }
+
+        // ============================================
+        // AYUDA
+        // ============================================
+        function abrirModalAyuda() {
+            mostrarModal({
+                titulo: "Ayuda y atajos",
+                grande: true,
+                contenido: `<div class="ayuda">
+                    <h4>Encontrar una impresora</h4>
+                    <ul>
+                        <li>Escribe en el buscador lo que sepas: <code>polanco admision</code>, <code>hp 408</code>, <code>236.69</code>. No importan tildes ni mayúsculas.</li>
+                        <li><kbd>Enter</kbd> abre la primera; <kbd>↓</kbd> baja al listado.</li>
+                        <li>Para ir a tiro fijo: <code>ip:10.35.236</code> · <code>id:330</code> · <code>serie:CNB3</code> · <code>marca:canon</code> · <code>modelo:ir1435</code> · <code>edificio:gerencia</code> · <code>ubi:direccion</code> · <code>nota:toner</code>. Varias palabras se juntan como <code>"sala 2"</code>.</li>
+                        <li>Los botones de la izquierda filtran por edificio o marca; los de arriba del listado, por estado.</li>
+                    </ul>
+                    <h4>Atajos de teclado</h4>
+                    <table class="atajos">
+                        <tr><td><kbd>/</kbd> · <kbd>Ctrl</kbd>+<kbd>K</kbd> · <kbd>Ctrl</kbd>+<kbd>F</kbd></td><td>Ir al buscador</td></tr>
+                        <tr><td><kbd>↑</kbd> <kbd>↓</kbd> (o <kbd>K</kbd> <kbd>J</kbd>)</td><td>Moverse por el listado (con la ficha abierta, pasa a la anterior o la siguiente)</td></tr>
+                        <tr><td><kbd>Enter</kbd></td><td>Abrir la ficha</td></tr>
+                        <tr><td><kbd>P</kbd></td><td>Hacer ping</td></tr>
+                        <tr><td><kbd>W</kbd></td><td>Abrir su web</td></tr>
+                        <tr><td><kbd>C</kbd></td><td>Copiar la IP</td></tr>
+                        <tr><td><kbd>T</kbd></td><td>Copiar la ficha completa (para el parte o un correo)</td></tr>
+                        <tr><td><kbd>F</kbd></td><td>Marcar o quitar favorita</td></tr>
+                        <tr><td><kbd>X</kbd></td><td>Seleccionar (para hacer ping o exportar varias)</td></tr>
+                        <tr><td><kbd>N</kbd></td><td>Anotar una incidencia</td></tr>
+                        <tr><td><kbd>E</kbd></td><td>Editar</td></tr>
+                        <tr><td><kbd>Esc</kbd></td><td>Cerrar lo que esté abierto; si no hay nada, quita la búsqueda y los filtros</td></tr>
+                        <tr><td><kbd>Ctrl</kbd>+<kbd>S</kbd></td><td>Exportar el listado a CSV</td></tr>
+                        <tr><td><kbd>?</kbd></td><td>Esta ayuda</td></tr>
+                    </table>
+                    <h4>Estados</h4>
+                    <ul>
+                        <li><span class="st st-online"><i></i>Online</span>: responde a ping. <span class="st st-web"><i></i>Solo web</span>: no responde a ping pero su web sí.</li>
+                        <li><span class="st st-offline"><i></i>Offline</span>: no responde. <span class="st st-desconocido"><i></i>Sin comprobar</span>: aún no se ha mirado.</li>
+                        <li>El último estado se recuerda aunque cierres el navegador, con la hora a la que se comprobó.</li>
+                        <li><b>Vigilancia</b> comprueba sola cada pocos minutos y avisa (también con notificación del sistema) cuando alguna deja de responder. El número de offline sale en la pestaña.</li>
+                    </ul>
+                    <h4>Cambios en el inventario</h4>
+                    <ul>
+                        <li>Lo que edites, añadas o des de baja se guarda en este navegador (sale con la etiqueta <span class="etq">editada</span>).</li>
+                        <li>Para que lo vea todo el equipo: <b>Más › Descargar fichero de impresoras</b> y sustituye <code>impresoras_con_serial.js</code>.</li>
+                    </ul>
+                </div>`,
+                acciones: [{ texto: "Entendido", clase: "btn-primary" }]
+            });
+        }
+
+        // ============================================
+        // IMPRIMIR
+        // ============================================
+        function imprimirPagina() {
+            agregarLog("Listado enviado a imprimir", "info");
+            window.print();
+        }
+        window.addEventListener("beforeprint", () => { imprimiendo = true; renderCabeceraLista(); renderLista(); });
+        window.addEventListener("afterprint", () => { imprimiendo = false; renderLista(); });
+
+        // ============================================
+        // MENÚ "MÁS"
+        // ============================================
+        function toggleMenu(forzar) {
+            const m = $("#menuMas");
+            const abrir = forzar !== undefined ? forzar : !m.classList.contains("abierto");
+            m.classList.toggle("abierto", abrir);
+            m.querySelector("[data-accion='menu']").setAttribute("aria-expanded", String(abrir));
+            if (abrir) setTimeout(() => m.querySelector(".menu-list button:not([hidden])")?.focus(), 10);
+        }
+        document.addEventListener("click", (e) => {
+            if (!e.target.closest("#menuMas")) toggleMenu(false);
+        });
+
+        // ============================================
+        // ACCIONES (un único manejador de clics)
+        // ============================================
+        function idDe(el) {
+            if (el.dataset.id) return el.dataset.id;
+            const cont = el.closest("[data-id]");
+            if (cont) return cont.dataset.id;
+            return el.closest("#ficha") ? ficha.id : null;
+        }
+
+        const ACCIONES = {
+            "sel": (id) => toggleSeleccion(id),
+            "sel-todas": (_, el) => seleccionarTodas(el.checked),
+            "fav": (id) => { toggleFavorito(id); if (fichaAbierta() && ficha.id === id) renderFicha(); },
+            "ping": (id) => comprobarUna(id),
+            "web": (id) => { const p = porId.get(id); if (p) agregarLog(`Abierta la web de ${p["IP-PC"]}`, "info"); },
+            "copiar-ip": (id) => { const p = porId.get(id); if (p) copiar(hostDe(p) || p["IP-PC"], "IP"); },
+            "copiar": (_, el) => copiar(el.dataset.valor, el.dataset.etiqueta),
+            "ficha-ticket": (id) => { const p = porId.get(id); if (p) { copiar(fichaTexto(p), "ficha"); } },
+            "abrir-id": (id) => { if (modalAbierto()) cerrarModal(); abrirFicha(id, { enfocar: true }); },
+            "cerrar-ficha": () => cerrarFicha(),
+            "ficha-anterior": () => moverFicha(-1),
+            "ficha-siguiente": () => moverFicha(1),
+            "qr": (id) => mostrarQR(id),
+            "editar": (id) => editarEnFicha(id),
+            "nueva": () => { toggleMenu(false); nuevaEnFicha(); },
+            "form-cancelar": () => { if (ficha.modo === "nueva") cerrarFicha(); else { ficha.modo = "ver"; renderFicha(); } },
+            "eliminar": (id) => confirmarEliminar(id),
+            "restaurar": (id) => restaurarOriginal(id),
+            "nota-guardar": (id) => guardarNota(id, $("#notaTexto").value),
+            "incidencia-guardar": (id) => guardarIncidenciaDesdeFicha(id),
+            "incidencia-borrar": (id, el) => {
+                if (el.classList.contains("confirmar")) { borrarIncidencia(id, el.dataset.inc); return; }
+                el.classList.add("confirmar");
+                el.textContent = "¿Borrar?";
+                setTimeout(() => { if (document.contains(el)) { el.classList.remove("confirmar"); el.innerHTML = icono("x"); } }, 3000);
+            },
+            "estado": (_, el) => setFiltro("estado", el.dataset.valor),
+            "edificio": (_, el) => setFiltro("edificio", el.dataset.valor),
+            "marca": (_, el) => setFiltro("marca", el.dataset.valor),
+            "favoritas": () => { filtros.favoritas = !filtros.favoritas; paginaActual = 1; actualizar(); },
+            "quitar-filtro": (_, el) => {
+                if (el.dataset.valor === "texto") { $("#buscar").value = ""; $("#cajaBusqueda").classList.remove("con-texto"); }
+                filtros[el.dataset.valor] = "";
+                paginaActual = 1;
+                actualizar();
+            },
+            "limpiar-filtros": () => reiniciarFiltros(true),
+            "borrar-busqueda": () => { $("#buscar").value = ""; aplicarBusqueda(); $("#buscar").focus(); },
+            "ordenar": (_, el) => ordenarPor(el.dataset.valor),
+            "vista": (_, el) => cambiarVista(el.dataset.valor),
+            "pagina": (_, el) => cambiarPagina(Number(el.dataset.valor)),
+            "comprobar": () => comprobarImpresoras(ultimoResultado),
+            "reintentar-offline": () => comprobarImpresoras(ultimoResultado.filter(p => claveEstado(p) === "offline")),
+            "cancelar-ping": () => { if (tareaPing) tareaPing.ctrl.abort(); },
+            "vigilancia": () => toggleVigilancia(),
+            "tema": () => toggleDarkMode(),
+            "menu": () => toggleMenu(),
+            "servidor": () => comprobarServidor(true),
+            "cerrar-modal": () => cerrarModal(),
+            "lote-ping": () => comprobarImpresoras(listaSeleccionadas()),
+            "lote-copiar": () => copiar(listaSeleccionadas().map(p => hostDe(p)).filter(Boolean).join("\n"), "IPs"),
+            "lote-exportar": () => exportarListaCSV(listaSeleccionadas(), "impresoras_seleccionadas.csv"),
+            "lote-favoritas": () => {
+                const lista = listaSeleccionadas();
+                lista.forEach(p => { if (!favoritos.includes(p.ID)) favoritos.push(p.ID); });
+                guardar(STORAGE_KEYS.favoritos, favoritos);
+                mostrarToast(`${plural(lista.length, "marcada", "marcadas")} como favoritas`, "success");
+                actualizar();
+            },
+            "lote-quitar": () => { seleccionadas.clear(); actualizar(); },
+            "exportar-csv": () => { toggleMenu(false); exportarCSV(); },
+            "descargar-datos": () => { toggleMenu(false); descargarFicheroDatos(); },
+            "importar": () => { toggleMenu(false); abrirImportar(); },
+            "backup": () => { toggleMenu(false); abrirModalBackup(); },
+            "logs": () => { toggleMenu(false); abrirModalLogs(); },
+            "config": () => { toggleMenu(false); abrirModalConfig(); },
+            "ayuda": () => { toggleMenu(false); abrirModalAyuda(); },
+            "imprimir": () => { toggleMenu(false); imprimirPagina(); },
+            "revisar": () => { toggleMenu(false); abrirRevisar(); }
+        };
+
+        document.addEventListener("click", (e) => {
+            const el = e.target.closest("[data-accion]");
+            if (el && !el.disabled) {
+                const fn = ACCIONES[el.dataset.accion];
+                if (fn) {
+                    // En los enlaces (Web) se deja que el navegador los abra
+                    if (el.tagName !== "A" && el.type !== "checkbox") e.preventDefault();
+                    fn(idDe(el), el, e);
+                }
+                return;
+            }
+            const fila = e.target.closest("tr.row, .card[data-id]");
+            if (fila && !e.target.closest("a, button, input, label, select, textarea")) {
+                if (e.ctrlKey || e.metaKey) { toggleSeleccion(fila.dataset.id); return; }
+                abrirFicha(fila.dataset.id);
+            }
+        });
+
+        function guardarIncidenciaDesdeFicha(id) {
+            const ta = $("#incTexto");
+            if (!ta || !ta.value.trim()) { mostrarToast("Escribe qué ha pasado", "warning"); ta && ta.focus(); return; }
+            if (agregarIncidencia(id, ta.value)) {
+                renderFicha();
+                mostrarToast("Incidencia anotada", "success");
+                $("#incTexto")?.focus();
+            }
+        }
+
+        // ============================================
+        // BÚSQUEDA (al instante)
+        // ============================================
+        function aplicarBusqueda() {
+            filtros.texto = $("#buscar").value.trim();
+            $("#cajaBusqueda").classList.toggle("con-texto", !!$("#buscar").value);
+            paginaActual = 1;
+            actualizar();
+        }
+        $("#buscar").addEventListener("input", aplicarBusqueda);
+        function enfocarBusqueda() {
+            toggleMenu(false);
+            const b = $("#buscar");
+            b.focus();
+            b.select();
+        }
+
+        // ============================================
+        // TECLADO
+        // ============================================
+        function filasVisibles() { return listaVisible().map(p => p.ID); }
+        function moverFila(delta, desdeBusqueda) {
+            if (fichaAbierta() && ficha.modo === "ver" && !desdeBusqueda) { moverFicha(delta); return; }
+            const ids = filasVisibles();
+            if (!ids.length) return;
+            let i = ids.indexOf(filaActiva);
+            i = desdeBusqueda || i === -1 ? 0 : Math.min(ids.length - 1, Math.max(0, i + delta));
+            filaActiva = ids[i];
+            document.querySelectorAll(".row.activa, .card.activa").forEach(x => x.classList.remove("activa"));
+            const el = document.querySelector(`.row[data-id="${CSS.escape(filaActiva)}"], .card[data-id="${CSS.escape(filaActiva)}"]`);
+            if (el) {
+                el.classList.add("activa");
+                el.focus({ preventScroll: true });
+                el.scrollIntoView({ block: "nearest" });
+            }
+        }
+        function objetivoTeclado() {
+            if (fichaAbierta() && ficha.modo === "ver" && ficha.id) return ficha.id;
+            return filaActiva && porId.has(filaActiva) ? filaActiva : null;
+        }
+
+        document.addEventListener("keydown", (e) => {
+            const t = e.target;
+            const escribiendo = t.matches && t.matches("input, textarea, select, [contenteditable]");
+            const mod = e.ctrlKey || e.metaKey;
+
+            if (e.key === "Escape") {
+                if ($("#menuMas").classList.contains("abierto")) { toggleMenu(false); $("#menuMas [data-accion='menu']").focus(); }
+                else if (modalAbierto()) cerrarModal();
+                else if (fichaAbierta()) cerrarFicha();
+                else if (t.id === "buscar" && t.value) { t.value = ""; aplicarBusqueda(); }
+                else if (hayFiltros()) reiniciarFiltros(true);
+                else if (escribiendo) t.blur();
+                return;
+            }
+            if (mod && !e.shiftKey && !e.altKey && (e.key.toLowerCase() === "k" || e.key.toLowerCase() === "f")) { e.preventDefault(); enfocarBusqueda(); return; }
+            if (mod && !e.shiftKey && e.key.toLowerCase() === "s") { e.preventDefault(); exportarCSV(); return; }
+            if (mod && e.key === "Enter" && t.id === "incTexto") { e.preventDefault(); guardarIncidenciaDesdeFicha(ficha.id); return; }
+            if (modalAbierto()) return;
+
+            if (t.id === "buscar") {
+                if (e.key === "ArrowDown") { e.preventDefault(); moverFila(1, true); }
+                else if (e.key === "Enter") {
+                    e.preventDefault();
+                    const p = ultimoResultado[0];
+                    if (p) abrirFicha(p.ID);
+                    else mostrarToast("No hay resultados", "warning");
+                }
+                return;
+            }
+            if (escribiendo || mod || e.altKey) return;
+            if (t.closest && t.closest(".menu-list")) {
+                if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+                    e.preventDefault();
+                    const items = [...document.querySelectorAll("#menuMas .menu-list button")].filter(b => b.offsetParent);
+                    const i = items.indexOf(t);
+                    items[(i + (e.key === "ArrowDown" ? 1 : -1) + items.length) % items.length].focus();
+                }
+                return;
+            }
+
+            const id = objetivoTeclado();
+            switch (e.key) {
+                case "/": e.preventDefault(); enfocarBusqueda(); break;
+                case "?": e.preventDefault(); abrirModalAyuda(); break;
+                case "ArrowDown": case "j": e.preventDefault(); moverFila(1); break;
+                case "ArrowUp": case "k": e.preventDefault(); moverFila(-1); break;
+                case "Enter":
+                    if (id && !t.closest("button, a") && !fichaAbierta()) { e.preventDefault(); abrirFicha(id); }
+                    break;
+                case "p": case "P": if (id) comprobarUna(id); break;
+                case "c": case "C": if (id) ACCIONES["copiar-ip"](id); break;
+                case "t": case "T": if (id) ACCIONES["ficha-ticket"](id); break;
+                case "f": case "F": if (id) ACCIONES.fav(id); break;
+                case "x": case "X": if (id) toggleSeleccion(id); break;
+                case "w": case "W": {
+                    const p = id && porId.get(id);
+                    const url = p && urlWeb(p);
+                    if (url) { window.open(url, "_blank", "noopener"); agregarLog(`Abierta la web de ${p["IP-PC"]}`, "info"); }
+                    break;
+                }
+                case "e": case "E": if (id && rolActual !== "lector") { e.preventDefault(); editarEnFicha(id); } break;
+                case "n": case "N":
+                    if (id) {
+                        e.preventDefault();
+                        if (!fichaAbierta() || ficha.id !== id || ficha.modo !== "ver") abrirFicha(id);
+                        setTimeout(() => $("#incTexto")?.focus(), 40);
+                    }
+                    break;
+            }
+        });
+
+        movil.addEventListener("change", () => renderLista());
+
+        // ============================================
+        // EASTER EGG: HECHO POR IVÁN 🎉
+        // ============================================
+        (function () {
+            let clics = 0, temporizador = null;
+            const titulo = $("#tituloApp");
+            titulo.addEventListener("click", () => {
+                clics++;
+                clearTimeout(temporizador);
+                temporizador = setTimeout(() => { clics = 0; }, 800);
+                if (clics >= 5) { clics = 0; activar(); }
+            });
+            function activar() {
+                const container = document.createElement("div");
+                container.className = "easter-egg-container";
+                const content = document.createElement("div");
+                content.className = "easter-egg-content";
+                content.innerHTML = `
+                    <div style="margin: 15px 0; font-size: 90px; animation: spin 2s linear infinite;">🙂</div>
+                    <div style="font-size: 42px; margin-bottom: 15px;">HECHO POR</div>
+                    <div style="font-size: 72px; font-weight: 900; letter-spacing: 4px; margin: 15px 0;">IVÁN</div>
+                    <div style="font-size: 18px; margin-top: 15px; opacity: 0.9;">Dudo que este secreto sea descubierto</div>`;
+                container.appendChild(content);
+                document.body.appendChild(container);
+                setTimeout(() => content.classList.add("active"), 10);
+                sonar();
+                const cerrar = () => {
+                    if (!container.parentElement) return;
+                    content.style.animation = "slideOutEasterEgg 0.4s ease-in forwards";
+                    setTimeout(() => container.remove(), 400);
+                };
+                content.addEventListener("click", cerrar);
+                setTimeout(cerrar, 5000);
+                agregarLog("🎉 Easter egg: HECHO POR IVÁN", "success");
+            }
+            function sonar() {
+                try {
+                    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                    const now = ctx.currentTime;
+                    const gain = ctx.createGain();
+                    gain.connect(ctx.destination);
+                    [523, 659, 784].forEach((f, i) => {
+                        const osc = ctx.createOscillator();
+                        osc.frequency.value = f;
+                        osc.connect(gain);
+                        osc.start(now + i * 0.1);
+                        osc.stop(now + i * 0.1 + 0.2);
+                    });
+                    gain.gain.setValueAtTime(0.3, now);
+                    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.6);
+                } catch {}
+            }
+        })();
+
+        // ============================================
+        // INICIO
+        // ============================================
+        cambiarRol(leerTexto(STORAGE_KEYS.rol) || "admin", true);
+        aplicarTema();
+        reconstruirDatos();
+        actualizar();
+        actualizarAvisosMenu();
+        comprobarServidor();
+        programarVigilancia(configuracion.vigilancia.activa);
+        agregarLog("Panel iniciado", "info");
+        if (!hayDatosBase) mostrarToast("No se ha podido cargar impresoras_con_serial.js", "danger", { duracion: 8000 });
+
+        // Guardar estados pendientes al cerrar
+        window.addEventListener("pagehide", () => {
+            guardar(STORAGE_KEYS.estados, estados);
+            guardar(STORAGE_KEYS.historial, historial);
+        });
+
+        // Si otra pestaña cambia favoritos, notas o estados, se actualiza esta
+        window.addEventListener("storage", (e) => {
+            if (!e.key || !e.key.startsWith("panel_impresoras_")) return;
+            favoritos = leer(STORAGE_KEYS.favoritos, []).map(String);
+            notas = leer(STORAGE_KEYS.notas, {});
+            incidencias = leer(STORAGE_KEYS.incidencias, {});
+            bajas = leer(STORAGE_KEYS.bajas, []).map(String);
+            if (e.key === STORAGE_KEYS.estados) estados = leer(STORAGE_KEYS.estados, {});
+            reconstruirDatos();
+            programarRender();
+        });
+
+        // PWA: solo funciona en http://localhost o https
+        if ("serviceWorker" in navigator && window.isSecureContext && location.protocol !== "file:") {
+            window.addEventListener("load", () => {
+                navigator.serviceWorker.register("service-worker.js").catch(() => {});
+            });
+        }
+    </script>
+</body>
+
+</html>

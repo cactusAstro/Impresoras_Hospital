@@ -1,0 +1,14 @@
+{
+  "name": "panel-impresoras",
+  "version": "3.0.0",
+  "private": true,
+  "description": "Panel de impresoras del departamento de Informática",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^5.1.0"
+  }
+}

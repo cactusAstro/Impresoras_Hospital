@@ -1,0 +1,14 @@
+{
+  "name": "Impresoras · Informática",
+  "short_name": "Impresoras",
+  "description": "Panel de impresoras del departamento de Informática",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f2f4f6",
+  "theme_color": "#2c6e70",
+  "lang": "es",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}
